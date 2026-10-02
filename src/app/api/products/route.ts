@@ -158,3 +158,54 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userRole = (session?.user as any)?.role;
+    const canCatalog = (session?.user as any)?.profile?.canCatalog;
+
+    if (!session || (userRole !== 'SUPERADMIN' && !canCatalog)) {
+      return NextResponse.json(
+        { error: 'Acceso no autorizado: requiere permisos de catálogo' },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const { id, isAvailable, price, isFeatured } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID de producto requerido' }, { status: 400 });
+    }
+
+    const updateData: any = {};
+    if (isAvailable !== undefined) updateData.isAvailable = Boolean(isAvailable);
+    if (price !== undefined) updateData.price = Number(price);
+    if (isFeatured !== undefined) updateData.isFeatured = Boolean(isFeatured);
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Auditoría
+    try {
+      await prisma.adminAuditLog.create({
+        data: {
+          userId: (session.user as any).id,
+          action: 'UPDATE_PRODUCT_AVAILABILITY',
+          resource: `Product:${id}`,
+          details: `El usuario ${session.user?.email} cambió el estado de disponibilidad de '${updated.name}' a: ${updated.isAvailable ? 'ACTIVO / VISIBLE' : 'DESACTIVADO / OCULTO'}`,
+        },
+      });
+    } catch (auditErr) {
+      // no bloquea
+    }
+
+    return NextResponse.json({ success: true, product: updated });
+  } catch (error: any) {
+    console.error('Error updating product availability:', error);
+    return NextResponse.json({ error: error.message || 'Error al actualizar producto' }, { status: 500 });
+  }
+}

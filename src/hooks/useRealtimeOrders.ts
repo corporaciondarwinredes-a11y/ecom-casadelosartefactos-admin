@@ -95,11 +95,15 @@ export function useRealtimeOrders({
             // Asesor recibe si: está asignado a él/ella O si está libre (sin asesor).
             const isSuperOrAdmin = userRole === 'SUPERADMIN' || userRole === 'ADMIN';
             const isAssignedToMe =
-              (currentUserId && orderData.assignedAdvisorId === currentUserId) ||
-              (currentUserName && orderData.assignedAdvisorName === currentUserName);
-            const isUnassigned = !orderData.assignedAdvisorId;
+              Boolean(
+                (currentUserId && orderData.assignedAdvisorId === currentUserId) ||
+                (currentUserName && orderData.assignedAdvisorName === currentUserName)
+              );
 
-            if (isSuperOrAdmin || isAssignedToMe || isUnassigned) {
+            // Requisito estricto: El asesor solo puede ver y ser alertado de sus pedidos asignados
+            const isRelevant = isSuperOrAdmin || isAssignedToMe;
+
+            if (isRelevant) {
               setLatestOrderAlert(orderData);
 
               // Reproducir sonido si está habilitado

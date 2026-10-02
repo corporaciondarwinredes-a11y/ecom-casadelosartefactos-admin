@@ -39,6 +39,7 @@ import {
   Building2,
   Send,
   Eye,
+  EyeOff,
   Check,
   Info,
   UploadCloud,
@@ -117,6 +118,11 @@ export default function AdminDashboard({
   const canKardex = userRole === 'SUPERADMIN' || Boolean(profile?.canKardex);
   const canUsers = userRole === 'SUPERADMIN' || Boolean(profile?.canUsers);
   const canErpExport = userRole === 'SUPERADMIN' || Boolean(profile?.canErpExport);
+  const isSellerRole =
+    userRole === 'SELLER' ||
+    Boolean(profile?.name?.includes('Asesor')) ||
+    Boolean(profile?.name?.includes('Venta')) ||
+    (!isSuperadmin && !canValidatePayments && canOrders);
 
   // Tab inicial según perfil
   const defaultTab = !canCatalog && canOrders ? 'manualOrder' : 'orders';
@@ -128,6 +134,7 @@ export default function AdminDashboard({
   const [adminUsers, setAdminUsers] = useState(initialUsers);
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [uploadingVoucherId, setUploadingVoucherId] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   // Filtros de Órdenes
@@ -388,7 +395,7 @@ export default function AdminDashboard({
   });
 
   // ==========================================
-  // FILTRADO DINÁMICO DE ÓRDENES POR FECHA
+  // FILTRADO DINÁMICO DE ÓRDENES POR FECHA Y ASESOR
   // ==========================================
   const filteredOrders = useMemo(() => {
     const now = new Date();
@@ -396,6 +403,22 @@ export default function AdminDashboard({
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     return orders.filter((order) => {
+      // 0. Si el usuario es Asesor comercial, solo puede ver sus pedidos asignados o generados por él
+      if (isSellerRole) {
+        const myId = currentUser?.id;
+        const myName = currentUser?.name?.toLowerCase().trim();
+        const assignedId = order.assignedAdvisorId;
+        const assignedName = order.assignedAdvisorName?.toLowerCase().trim();
+        const createdById = order.userId;
+        const notes = (order.customerNotes || '').toLowerCase();
+
+        const isMine =
+          Boolean(myId && (assignedId === myId || createdById === myId)) ||
+          Boolean(myName && (assignedName === myName || notes.includes(myName)));
+
+        if (!isMine) return false;
+      }
+
       // 1. Filtro de estado
       if (orderFilter === 'PENDING' && order.paymentStatus !== 'PENDING_VALIDATION') return false;
       if (orderFilter === 'VALIDATED' && order.paymentStatus !== 'VALIDATED') return false;
@@ -439,7 +462,7 @@ export default function AdminDashboard({
 
       return true; // 'ALL'
     });
-  }, [orders, orderFilter, dateRangePreset, customStartDate, customEndDate, orderSearchTerm]);
+  }, [orders, orderFilter, dateRangePreset, customStartDate, customEndDate, orderSearchTerm, isSellerRole, currentUser]);
 
   // Contadores rápidos para la barra de fechas
   const countTodayOrders = useMemo(() => {
@@ -447,10 +470,24 @@ export default function AdminDashboard({
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     return orders.filter((o) => {
+      if (isSellerRole) {
+        const myId = currentUser?.id;
+        const myName = currentUser?.name?.toLowerCase().trim();
+        const assignedId = o.assignedAdvisorId;
+        const assignedName = o.assignedAdvisorName?.toLowerCase().trim();
+        const createdById = o.userId;
+        const notes = (o.customerNotes || '').toLowerCase();
+
+        const isMine =
+          Boolean(myId && (assignedId === myId || createdById === myId)) ||
+          Boolean(myName && (assignedName === myName || notes.includes(myName)));
+
+        if (!isMine) return false;
+      }
       const d = new Date(o.createdAt);
       return d >= startOfToday && d <= endOfToday;
     }).length;
-  }, [orders]);
+  }, [orders, isSellerRole, currentUser]);
 
   // ==========================================
   // OPERACIONES DE VENTA ASISTIDA (POS)
@@ -680,6 +717,95 @@ export default function AdminDashboard({
       alert('Error en la exportación ERP');
     } finally {
       setLoadingAction(null);
+    }
+  };
+
+  // Desactivar / Activar Producto (Visibilidad en la Tienda)
+  const handleToggleAvailability = async (productId: string, currentAvailable: boolean) => {
+    if (!canCatalog) {
+      alert('Acceso Denegado: Su perfil no tiene permisos para modificar la disponibilidad de artefactos.');
+      return;
+    }
+
+    const newStatus = !currentAvailable;
+    setLoadingAction(`availability-${productId}`);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: productId, isAvailable: newStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar visibilidad');
+
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, isAvailable: newStatus } : p))
+      );
+      setFeedbackMessage(
+        newStatus
+          ? '✓ Artefacto reactivado: visible para clientes en la tienda online.'
+          : '✓ Artefacto desactivado: oculto del catálogo, no se mostrará a los clientes.'
+      );
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } catch (err: any) {
+      alert(err.message || 'Error al cambiar la disponibilidad del producto');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Subir voucher de pago directamente desde la lista de pedidos
+  const handleUploadOrderVoucher = async (orderId: string, file: File) => {
+    setUploadingVoucherId(orderId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'vouchers');
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok || !uploadData.url) {
+        throw new Error(uploadData.error || 'Error al subir la imagen del comprobante');
+      }
+
+      const receiptUrl = uploadData.url;
+
+      // Actualizar pedido en base de datos
+      const patchRes = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentReceiptUrl: receiptUrl }),
+      });
+
+      const patchData = await patchRes.json();
+      if (!patchRes.ok) {
+        throw new Error(patchData.error || 'Error al vincular el comprobante al pedido');
+      }
+
+      // Actualizar estado local reactivo
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? {
+                ...o,
+                paymentReceiptUrl: receiptUrl,
+                paymentStatus: o.paymentStatus === 'PENDING_PAYMENT' ? 'PENDING_VALIDATION' : o.paymentStatus,
+              }
+            : o
+        )
+      );
+
+      setFeedbackMessage('¡Comprobante de pago cargado exitosamente y enviado a validación de Tesorería!');
+      setTimeout(() => setFeedbackMessage(null), 3500);
+    } catch (err: any) {
+      console.error('Error uploading order voucher:', err);
+      alert(err.message || 'Error al subir comprobante');
+    } finally {
+      setUploadingVoucherId(null);
     }
   };
 
@@ -1291,6 +1417,14 @@ export default function AdminDashboard({
                   ? 'Tienes permisos para validar pagos y autorizar la descarga física de almacén.'
                   : 'Perfil de Asesor Comercial: puedes consultar órdenes y dar soporte, pero la validación de pago la ejecuta Tesorería.'}
               </p>
+              {isSellerRole && (
+                <div className="mt-2.5 inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-900 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+                  <span>
+                    Vista de Asesor Comercial: Mostrando únicamente tus pedidos asignados ({currentUser?.name || currentUser?.email || 'Asesor'}).
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Búsqueda rápida de orden */}
@@ -1525,16 +1659,58 @@ export default function AdminDashboard({
                           <span className="block text-[10px] text-slate-400 mt-0.5">
                             {order.paymentMethod}
                           </span>
-                          {order.paymentReceiptUrl && (
-                            <a
-                              href={order.paymentReceiptUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2 py-0.5 rounded mt-1 transition-colors"
-                              title="Ver voucher de pago subido por el cliente"
+                          {!order.paymentReceiptUrl ? (
+                            <label
+                              className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md border mt-1.5 cursor-pointer transition-all shadow-sm ${
+                                uploadingVoucherId === order.id
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300 opacity-70 pointer-events-none'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 active:scale-95'
+                              }`}
+                              title="Subir foto del comprobante de pago para este pedido"
                             >
-                              📎 Ver Voucher
-                            </a>
+                              <UploadCloud className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                              <span>{uploadingVoucherId === order.id ? 'Subiendo...' : '📎 Subir Voucher'}</span>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                className="hidden"
+                                disabled={uploadingVoucherId === order.id}
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleUploadOrderVoucher(order.id, f);
+                                }}
+                              />
+                            </label>
+                          ) : (
+                            <div className="flex items-center gap-1 mt-1">
+                              <a
+                                href={order.paymentReceiptUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2 py-0.5 rounded transition-colors"
+                                title="Ver comprobante de pago"
+                              >
+                                📎 Ver Voucher
+                              </a>
+                              <label
+                                className={`inline-flex items-center p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors ${
+                                  uploadingVoucherId === order.id ? 'opacity-50 pointer-events-none' : ''
+                                }`}
+                                title="Actualizar o cambiar comprobante"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  disabled={uploadingVoucherId === order.id}
+                                  onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (f) handleUploadOrderVoucher(order.id, f);
+                                  }}
+                                />
+                              </label>
+                            </div>
                           )}
                         </td>
                         <td className="py-3.5 px-4">
@@ -2295,6 +2471,7 @@ export default function AdminDashboard({
                   <th className="py-3 px-4 font-bold">Precio Regular / Oferta</th>
                   <th className="py-3 px-4 font-bold text-center">Stock Físico</th>
                   <th className="py-3 px-4 font-bold text-center">Calibrador Rápido</th>
+                  <th className="py-3 px-4 font-bold text-center">Visibilidad Tienda</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2377,6 +2554,48 @@ export default function AdminDashboard({
                             title="Ingresar lote (+5)"
                           >
                             +5
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <div className="flex flex-col items-center justify-center gap-1.5">
+                          {p.isAvailable !== false ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <Eye className="w-3 h-3 text-emerald-600" />
+                              Visible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                              <EyeOff className="w-3 h-3 text-slate-500" />
+                              Oculto / Pausado
+                            </span>
+                          )}
+
+                          <button
+                            onClick={() => handleToggleAvailability(p.id, p.isAvailable !== false)}
+                            disabled={loadingAction === `availability-${p.id}`}
+                            className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg border transition-all active:scale-95 ${
+                              p.isAvailable !== false
+                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                            }`}
+                            title={
+                              p.isAvailable !== false
+                                ? 'Desactivar para no mostrarlo en la tienda a los clientes'
+                                : 'Activar para que vuelva a mostrarse en la tienda online'
+                            }
+                          >
+                            {p.isAvailable !== false ? (
+                              <>
+                                <EyeOff className="w-3 h-3" />
+                                <span>{loadingAction === `availability-${p.id}` ? 'Pausando...' : 'Desactivar'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3 h-3" />
+                                <span>{loadingAction === `availability-${p.id}` ? 'Activando...' : 'Activar'}</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </td>
