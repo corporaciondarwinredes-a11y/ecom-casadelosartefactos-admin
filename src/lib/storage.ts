@@ -35,10 +35,23 @@ export async function saveBlob(
   // 1. Si existe token de Vercel Blob (Producción en Vercel)
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     const blobPath = `${subfolder}/${uniqueName}`;
-    const blobResult = await put(blobPath, fileBuffer, {
-      access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    let blobResult;
+    try {
+      blobResult = await put(blobPath, fileBuffer, {
+        access: 'public',
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      });
+    } catch (err: any) {
+      if (err.message && err.message.includes('private store')) {
+        blobResult = await put(blobPath, fileBuffer, {
+          access: 'private',
+          token: process.env.BLOB_READ_WRITE_TOKEN,
+        });
+      } else {
+        throw err;
+      }
+    }
+
     return {
       url: blobResult.url,
       filepath: blobPath,
