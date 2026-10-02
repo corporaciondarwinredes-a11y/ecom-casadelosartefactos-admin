@@ -277,7 +277,7 @@ async function main() {
       stock: 7,
       sku: 'CD-CLI-MID-1800',
       barcode: '6934520194821',
-      image: 'https://images.unsplash.com/photo-1614633833026-0e205579b504?auto=format&fit=crop&w=1000&q=80',
+      image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1000&q=80',
       isFeatured: false,
     },
     {
