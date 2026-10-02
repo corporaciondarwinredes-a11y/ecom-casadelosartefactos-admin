@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+    --brand-blue: #2563eb;
+    --brand-dark: #0f172a;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Badges de Eficiencia Energética Oficial */
+.energy-badge-a3 {
+  background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  color: white;
+}
+.energy-badge-a2 {
+  background: linear-gradient(135deg, #059669 0%, #34d399 100%);
+  color: white;
+}
+.energy-badge-a1 {
+  background: linear-gradient(135deg, #10b981 0%, #6ee7b7 100%);
+  color: #064e3b;
+}
+.energy-badge-b {
+  background: linear-gradient(135deg, #d97706 0%, #fcd34d 100%);
+  color: #78350f;
+}
+
+/* Efectos de elevación para tarjetas de electrodomésticos */
+.appliance-card {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.appliance-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

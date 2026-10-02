@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  SUPERADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum StockMovementType {
+  SALE_DEDUCTION
+  MANUAL_RESTOCK
+  INVENTORY_ADJUSTMENT
+  RETURN_RESTOCK
+}
+
+enum ApplianceCategory {
+  TELEVISORES
+  AUDIO
+  LAVADORAS
+  REFRIGERADORAS
+  CONGELADORAS
+  COCINAS_HORNOS
+  CLIMATIZACION
+}
+
+model Profile {
+  id                  String   @id @default(uuid())
+  name                String   @unique
+  description         String?
+  canCatalog          Boolean  @default(false)
+  canOrders           Boolean  @default(false)
+  canValidatePayments Boolean  @default(false)
+  canKardex           Boolean  @default(false)
+  canUsers            Boolean  @default(false)
+  canErpExport        Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  users               User[]
+}
+
+model User {
+  id            String          @id @default(uuid())
+  name          String?
+  email         String          @unique
+  password      String?         // Hash seguro bcryptjs (10+ salt rounds) - NUNCA expuesto al cliente
+  phone         String?
+  documentType  String?         @default("DNI") // DNI, RUC, CE
+  documentNumber String?
+  emailVerified DateTime?
+  image         String?
+  role          Role            @default(CUSTOMER)
+  profileId     String?
+  profile       Profile?        @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  orders        Order[]
+  auditLogs     AdminAuditLog[]
+}
+
+model Product {
+  id               String            @id @default(uuid())
+  name             String
+  brand            String
+  modelCode        String?
+  category         ApplianceCategory @default(TELEVISORES)
+  slug             String            @unique
+  description      String
+  specifications   String?
+  warrantyMonths   Int               @default(12)
+  energyRating     String?           @default("A+")
+  voltage          String?           @default("220V / 60Hz")
+  dimensions       String?
+  weightKg         Float?
+  retailPrice      Float             @default(0)
+  discountPrice    Float?
+  price            Float
+  stock            Int               @default(0)
+  sku              String            @unique
+  barcode          String?
+  image            String
+  isFeatured       Boolean           @default(false)
+  isAvailable      Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  orderItems       OrderItem[]
+  stockMovements   StockMovement[]
+  images           ProductImage[]
+
+  @@index([isAvailable, category])
+  @@index([isAvailable, category, price])
+  @@index([isAvailable, brand])
+  @@index([isAvailable, isFeatured, createdAt(sort: Desc)])
+  @@index([barcode])
+  @@index([modelCode])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  localPath String?
+  altText   String?
+  isPrimary Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id                 String          @id @default(uuid())
+  orderNumber        String          @unique
+  customerName       String
+  customerEmail      String
+  customerPhone      String
+  customerDocType    String          @default("DNI")
+  customerDocNumber  String
+  customerFiscalName String?
+  shippingAddress    String
+  shippingCity       String          @default("Lima")
+  shippingDistrict   String?
+  shippingReference  String?
+  shippingCost       Float           @default(0)
+  totalAmount        Float
+  discountAmount     Float           @default(0)
+  currency           String          @default("PEN")
+  status             OrderStatus     @default(PENDING)
+  paymentStatus      String          @default("PENDING_VALIDATION")
+  paymentValidatedBy String?
+  paymentValidatedAt DateTime?
+  paymentMethod      String          @default("TRANSFERENCIA")
+  paymentReference   String?
+  paymentReceiptUrl  String?
+  assignedAdvisorId  String?
+  assignedAdvisorName String?
+  assignedAdvisorPhone String?
+  customerNotes      String?
+  deliveryType       String?         @default("DELIVERY") // DELIVERY, STORE_PICKUP
+  stockDeducted      Boolean         @default(false)
+  erpExported        Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  userId             String?
+  user               User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items              OrderItem[]
+  stockMovements     StockMovement[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([assignedAdvisorId, createdAt(sort: Desc)])
+  @@index([customerPhone])
+  @@index([customerDocNumber])
+}
+
+model OrderItem {
+  id                 String   @id @default(uuid())
+  orderId            String
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId          String?
+  product            Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName        String
+  productBrand       String
+  productSku         String
+  productCategory    String
+  warrantyMonths     Int      @default(12)
+  unitPrice          Float
+  quantity           Int
+  subtotal           Float
+  productImage       String
+}
+
+model StockMovement {
+  id             String            @id @default(uuid())
+  productId      String
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type           StockMovementType
+  inQuantity     Int               @default(0)
+  outQuantity    Int               @default(0)
+  changeQuantity Int
+  previousStock  Int
+  balance        Int               @default(0)
+  newStock       Int
+  orderId        String?
+  order          Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  reference      String?
+  user           String?
+  note           String?
+  createdAt      DateTime          @default(now())
+}
+
+model AdminAuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  resource  String
+  ipAddress String?
+  userAgent String?
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model SiteBanner {
+  id               String   @id @default(uuid())
+  title            String
+  subtitle         String?
+  badgeText        String?  @default("Distribución Oficial — Corporación Darwin S.A.C.")
+  imageUrl         String   // URL de la imagen de campaña o artefacto
+  tagText          String?  @default("Línea Blanca & Tecnología Pro")
+  tagHighlight     String?  @default("Eficiencia A+++")
+  cardTitle        String?  @default("Refrigeradoras French Door No Frost Inverter")
+  cardDescription  String?  @default("Ahorro energético comprobado, bandejas de cristal templado y sistema Multi Air Flow.")
+  cardBadge        String?  @default("Garantía hasta 36 meses")
+  ctaText          String?  @default("Explorar Catálogo")
+  ctaLink          String?  @default("#catalogo")
+  secondaryCtaText String?  @default("Asesoría en Medidas por WhatsApp")
+  secondaryCtaLink String?  @default("https://wa.me/51989438130?text=Hola,%20solicito%20asesoria%20tecnica%20sobre%20medidas%20y%20artefactos")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AnnouncementBar {
+  id            String   @id @default(uuid())
+  message       String   // Ej: "¡Día del Shopping! Hasta 40% de descuento en Línea Blanca y Smart TVs"
+  highlightText String?  @default("CAMPAÑA VIGENTE")
+  linkText      String?  @default("Ver Ofertas")
+  linkUrl       String?  @default("/?category=REFRIGERACION")
+  badgeText     String?  @default("GARANTÍA OFICIAL")
+  isActive      Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
+model SupportChannel {
+  id             String   @id @default(uuid())
+  name           String   // Ej: "Asesoría Técnica y Medidas", "Ventas & Facturación", "Atención Central"
+  phone          String   // Ej: "989438130"
+  formattedPhone String?  @default("+51 989 438 130")
+  roleTitle      String?  @default("Especialista en cubicaje y artefactos")
+  schedule       String   @default("Lunes a Sábado: 8:00 AM - 8:00 PM")
+  startHour      Int      @default(8)   // 8 (08:00)
+  endHour        Int      @default(20)  // 20 (20:00)
+  autoSchedule   Boolean  @default(true) // Si evalúa la hora local para mostrar 'En línea'
+  isActive       Boolean  @default(true) // Switch manual para activar o desactivar número
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model CategoryBanner {
+  id        String   @id @default(uuid())
+  category  String   @unique // Ej: "TELEVISORES_AUDIO", "REFRIGERACION", etc.
+  name      String
+  subtitle  String?
+  tag       String?  @default("Precios Exclusivos")
+  imageUrl  String   // URL de la imagen del banner cuadrado
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
