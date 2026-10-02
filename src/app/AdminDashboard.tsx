@@ -117,21 +117,19 @@ export default function AdminDashboard({
   initialCategoryBanners = [],
   kpis,
 }: Props) {
-  // Roles y Privilegios RBAC
+  // Roles y Privilegios RBAC estrictos
   const userRole = currentUser?.role || 'ADMIN';
   const profile = currentUser?.profile;
-  const isSuperadmin = userRole === 'SUPERADMIN' || Boolean(profile?.canUsers);
-  const canCatalog = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canCatalog);
-  const canOrders = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canOrders);
-  const canValidatePayments = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canValidatePayments);
-  const canKardex = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canKardex);
-  const canUsers = userRole === 'SUPERADMIN' || Boolean(profile?.canUsers);
-  const canErpExport = userRole === 'SUPERADMIN' || Boolean(profile?.canErpExport);
-  const isSellerRole =
-    userRole === 'SELLER' ||
-    Boolean(profile?.name?.includes('Asesor')) ||
-    Boolean(profile?.name?.includes('Venta')) ||
-    (!isSuperadmin && !canValidatePayments && canOrders);
+  const isSuperadmin = userRole === 'SUPERADMIN';
+  const canCatalog = isSuperadmin || Boolean(profile?.canCatalog);
+  const canOrders = isSuperadmin || Boolean(profile?.canOrders);
+  const canValidatePayments = isSuperadmin || Boolean(profile?.canValidatePayments);
+  const canKardex = isSuperadmin || Boolean(profile?.canKardex);
+  const canUsers = isSuperadmin || Boolean(profile?.canUsers);
+  const canErpExport = isSuperadmin || Boolean(profile?.canErpExport);
+
+  // Un asesor de ventas es todo usuario que tiene permiso de pedidos pero NO de validar pagos ni de superadmin
+  const isSellerRole = !isSuperadmin && !canValidatePayments && canOrders;
 
   // Tab inicial según perfil
   const defaultTab = !canCatalog && canOrders ? 'manualOrder' : 'orders';
@@ -423,8 +421,13 @@ export default function AdminDashboard({
     currentUserName: currentUser?.name || undefined,
     userRole,
     onNewOrder: (order) => {
-      // Refrescar automáticamente la tabla de órdenes sin necesidad de F5
-      refreshAllData();
+      // Refrescar únicamente la tabla de órdenes de forma eficiente sin llamadas pesadas
+      fetch('/api/orders')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((freshOrders) => {
+          if (Array.isArray(freshOrders)) setOrders(freshOrders);
+        })
+        .catch((e) => console.error('Error refrescando pedidos en vivo:', e));
       setFeedbackMessage(`¡Nuevo Pedido en Vivo: ${order.orderNumber} por S/ ${Number(order.totalAmount).toFixed(2)}!`);
       setTimeout(() => setFeedbackMessage(null), 5000);
     },
@@ -443,14 +446,17 @@ export default function AdminDashboard({
       if (isSellerRole) {
         const myId = currentUser?.id;
         const myName = currentUser?.name?.toLowerCase().trim();
+        const myPhone = ((currentUser as any)?.phone || '').trim();
         const assignedId = order.assignedAdvisorId;
         const assignedName = order.assignedAdvisorName?.toLowerCase().trim();
+        const assignedPhone = (order.assignedAdvisorPhone || '').trim();
         const createdById = order.userId;
         const notes = (order.customerNotes || '').toLowerCase();
 
         const isMine =
           Boolean(myId && (assignedId === myId || createdById === myId)) ||
-          Boolean(myName && (assignedName === myName || notes.includes(myName)));
+          Boolean(myName && (assignedName === myName || notes.includes(myName))) ||
+          Boolean(myPhone && (assignedPhone === myPhone || notes.includes(myPhone)));
 
         if (!isMine) return false;
       }

@@ -7,22 +7,20 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     const userRole = (session?.user as any)?.role;
-    const canOrders = (session?.user as any)?.profile?.canOrders;
+    const isSuperadmin = userRole === 'SUPERADMIN';
+    const profile = (session?.user as any)?.profile;
+    const canOrders = isSuperadmin || Boolean(profile?.canOrders);
+    const canValidatePayments = isSuperadmin || Boolean(profile?.canValidatePayments);
 
-    if (!session || (userRole !== 'SUPERADMIN' && !canOrders)) {
+    if (!session || !canOrders) {
       return NextResponse.json(
         { error: 'Acceso restringido: requiere permisos de gestión o consulta de pedidos' },
         { status: 403 }
       );
     }
 
-    const isSuperOrAdmin = userRole === 'SUPERADMIN' || userRole === 'ADMIN';
-    const profileName = (session?.user as any)?.profile?.name || '';
-    const isSeller =
-      userRole === 'SELLER' ||
-      profileName.includes('Asesor') ||
-      profileName.includes('Venta') ||
-      (!isSuperOrAdmin && canOrders);
+    // Un asesor de ventas es todo usuario que consulta pedidos pero NO es superadmin ni valida pagos
+    const isSeller = !isSuperadmin && !canValidatePayments && canOrders;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');

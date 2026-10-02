@@ -15,28 +15,35 @@ export default async function AdminPage() {
   }
 
   const userRole = (session.user as any)?.role;
-  const isSuperOrAdmin = userRole === 'SUPERADMIN' || userRole === 'ADMIN';
-  const canUsers = Boolean((session.user as any)?.profile?.canUsers);
-  const profileName = (session.user as any)?.profile?.name || '';
-  const isSeller =
-    userRole === 'SELLER' ||
-    profileName.includes('Asesor') ||
-    profileName.includes('Venta') ||
-    (!isSuperOrAdmin && Boolean((session.user as any)?.profile?.canOrders));
+  const isSuperadmin = userRole === 'SUPERADMIN';
+  const profile = (session.user as any)?.profile;
+  const canUsers = isSuperadmin || Boolean(profile?.canUsers);
+  const canValidatePayments = isSuperadmin || Boolean(profile?.canValidatePayments);
+  const canOrders = isSuperadmin || Boolean(profile?.canOrders);
+
+  // Un asesor de ventas es todo usuario que gestiona pedidos pero NO es superadmin ni valida pagos/auditoría
+  const isSeller = !isSuperadmin && !canValidatePayments && canOrders;
 
   const orderWhere: any = {};
   if (isSeller) {
+    const userId = (session.user as any)?.id;
+    const userName = session.user?.name || '';
     const userPhone = (session.user as any)?.phone || '';
-    orderWhere.OR = [
-      { assignedAdvisorId: (session.user as any).id },
-      { userId: (session.user as any).id },
-      { assignedAdvisorName: session.user.name },
-      { customerNotes: { contains: session.user.name || '', mode: 'insensitive' } },
-    ];
-    if (userPhone) {
-      orderWhere.OR.push({ assignedAdvisorPhone: userPhone });
-      orderWhere.OR.push({ customerNotes: { contains: userPhone, mode: 'insensitive' } });
+
+    const orConditions: any[] = [];
+    if (userId) {
+      orConditions.push({ assignedAdvisorId: userId });
+      orConditions.push({ userId: userId });
     }
+    if (userName) {
+      orConditions.push({ assignedAdvisorName: userName });
+      orConditions.push({ customerNotes: { contains: userName, mode: 'insensitive' } });
+    }
+    if (userPhone) {
+      orConditions.push({ assignedAdvisorPhone: userPhone });
+      orConditions.push({ customerNotes: { contains: userPhone, mode: 'insensitive' } });
+    }
+    orderWhere.OR = orConditions.length > 0 ? orConditions : [{ id: 'none' }];
   }
 
   // Obtener data directamente de PostgreSQL con límites de seguridad y agregaciones

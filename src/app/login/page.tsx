@@ -136,17 +136,45 @@ export default function AdminLoginPage() {
               </button>
               <button
                 type="button"
-                onClick={() => handleQuickFill('ventas@corporaciondarwin.com', 'Ventas2026!')}
-                className="py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
-              >
-                💼 Asesor de Ventas
-              </button>
-              <button
-                type="button"
                 onClick={() => handleQuickFill('tesoreria@corporaciondarwin.com', 'Finanzas2026!')}
                 className="py-1.5 px-2 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 text-slate-600 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
               >
                 💰 Tesorería & Pagos
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('sandy@lacasadelosartefactos.pe', 'Darwin2026!')}
+                className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-mono border border-blue-200 text-center transition-colors font-bold"
+              >
+                👩‍💼 Asesora SANDY
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('antonia@lacasadelosartefactos.pe', 'Darwin2026!')}
+                className="py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
+              >
+                👩‍💼 Asesora Antonia
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('milagros@lacasadelosartefactos.pe', 'Darwin2026!')}
+                className="py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
+              >
+                👩‍💼 Asesora Milagros
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('fabricio@lacasadelosartefactos.pe', 'Darwin2026!')}
+                className="py-1.5 px-2 bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
+              >
+                👨‍💼 Asesor Fabricio
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('ventas@corporaciondarwin.com', 'Ventas2026!')}
+                className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-[11px] font-mono border border-slate-200 text-center transition-colors"
+              >
+                💼 Mostrador General
               </button>
             </div>
           </div>
