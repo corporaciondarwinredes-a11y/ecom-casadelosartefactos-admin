@@ -121,10 +121,10 @@ export default function AdminDashboard({
   const userRole = currentUser?.role || 'ADMIN';
   const profile = currentUser?.profile;
   const isSuperadmin = userRole === 'SUPERADMIN' || Boolean(profile?.canUsers);
-  const canCatalog = userRole === 'SUPERADMIN' || Boolean(profile?.canCatalog);
-  const canOrders = userRole === 'SUPERADMIN' || Boolean(profile?.canOrders);
-  const canValidatePayments = userRole === 'SUPERADMIN' || Boolean(profile?.canValidatePayments);
-  const canKardex = userRole === 'SUPERADMIN' || Boolean(profile?.canKardex);
+  const canCatalog = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canCatalog);
+  const canOrders = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canOrders);
+  const canValidatePayments = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canValidatePayments);
+  const canKardex = userRole === 'SUPERADMIN' || userRole === 'ADMIN' || Boolean(profile?.canKardex);
   const canUsers = userRole === 'SUPERADMIN' || Boolean(profile?.canUsers);
   const canErpExport = userRole === 'SUPERADMIN' || Boolean(profile?.canErpExport);
   const isSellerRole =
@@ -2680,12 +2680,12 @@ export default function AdminDashboard({
             <div>
               <h2 className="text-base font-bold text-slate-900">Catálogo de Artefactos del Hogar</h2>
               <p className="text-xs text-slate-500">
-                Registra nuevos electrodomésticos o usa los botones rápidos para calibrar stock.
+                Registra nuevos electrodomésticos, gestiona marcas oficiales o usa los botones rápidos para calibrar stock.
               </p>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <div className="relative flex-1 sm:w-64">
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-56">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -2697,13 +2697,81 @@ export default function AdminDashboard({
               </div>
 
               <button
+                type="button"
+                onClick={() => setActiveTab('brands')}
+                className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 px-3.5 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+                title="Ver y registrar marcas oficiales autorizadas"
+              >
+                <Tag className="w-4 h-4" />
+                <span>🏷️ Gestionar Marcas ({brands.length})</span>
+              </button>
+
+              <button
                 onClick={handleOpenNewProductModal}
                 className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Registrar Nuevo Artefacto</span>
+                <span>+ Nuevo Artefacto</span>
               </button>
             </div>
+          </div>
+
+          {/* BARRA DE FILTRADO RÁPIDO POR MARCA */}
+          <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3 overflow-x-auto">
+            <div className="flex items-center gap-1.5 flex-nowrap">
+              <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider flex-shrink-0 mr-1">
+                Marcas Oficiales:
+              </span>
+              <button
+                type="button"
+                onClick={() => setCatalogSearch('')}
+                className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all flex-shrink-0 cursor-pointer ${
+                  !catalogSearch
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                }`}
+              >
+                Todas ({products.length})
+              </button>
+              {brands.map((b) => {
+                const count = products.filter((p) => p.brand?.toLowerCase() === b.name?.toLowerCase()).length;
+                const isSelected = catalogSearch.toLowerCase() === b.name.toLowerCase();
+                return (
+                  <button
+                    key={b.id || b.name}
+                    type="button"
+                    onClick={() => setCatalogSearch(isSelected ? '' : b.name)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all flex-shrink-0 cursor-pointer ${
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white text-slate-700 hover:bg-blue-50 hover:text-blue-700 border border-slate-200'
+                    }`}
+                  >
+                    <span>{b.name}</span>
+                    <span className="ml-1 opacity-70 font-mono text-[10px]">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingBrand(null);
+                setBrandForm({
+                  name: '',
+                  description: '',
+                  category: 'TELEVISORES',
+                  order: brands.length,
+                  isActive: true,
+                  logo: '',
+                });
+                setShowBrandModal(true);
+              }}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-white hover:bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 transition-all flex-shrink-0 whitespace-nowrap cursor-pointer ml-auto"
+            >
+              + Registrar Marca
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -3438,7 +3506,27 @@ export default function AdminDashboard({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Marca Oficial *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">Marca Oficial *</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingBrand(null);
+                        setBrandForm({
+                          name: '',
+                          description: '',
+                          category: newProduct.category || 'TELEVISORES',
+                          order: brands.length,
+                          isActive: true,
+                          logo: '',
+                        });
+                        setShowBrandModal(true);
+                      }}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                    >
+                      + Registrar nueva marca
+                    </button>
+                  </div>
                   <select
                     value={newProduct.brand}
                     onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
