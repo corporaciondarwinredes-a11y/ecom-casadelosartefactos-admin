@@ -21,6 +21,7 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
+import { getSafeImageUrl } from '@/lib/imageUtils';
 
 interface Props {
   initialBanners?: any[];
@@ -755,7 +756,7 @@ export default function MarketingSettingsTab({
                 {bannerPreview || newBanner.imageUrl ? (
                   <div className="relative rounded-2xl border border-slate-200 overflow-hidden bg-slate-900 group shadow-md">
                     <img
-                      src={bannerPreview || newBanner.imageUrl}
+                      src={bannerPreview || getSafeImageUrl(newBanner.imageUrl)}
                       alt="Vista previa del banner"
                       className="w-full h-44 sm:h-52 object-cover object-center"
                     />
@@ -908,7 +909,7 @@ export default function MarketingSettingsTab({
                   {/* Thumbnail de la imagen */}
                   <div className="w-24 h-16 sm:w-32 sm:h-20 rounded-xl bg-slate-900 overflow-hidden flex-shrink-0 relative border border-slate-200">
                     <img
-                      src={b.imageUrl}
+                      src={getSafeImageUrl(b.imageUrl)}
                       alt={b.title}
                       className="w-full h-full object-cover object-center"
                       onError={(e: any) => {
@@ -1257,7 +1258,7 @@ export default function MarketingSettingsTab({
               {/* Vista Previa de la Imagen Cuadrada */}
               <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-slate-900 border border-slate-200 group">
                 <img
-                  src={cat.imageUrl}
+                  src={getSafeImageUrl(cat.imageUrl)}
                   alt={cat.name}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                 />

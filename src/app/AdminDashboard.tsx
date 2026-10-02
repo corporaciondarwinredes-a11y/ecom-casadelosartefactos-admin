@@ -58,6 +58,7 @@ import {
 
 import MarketingSettingsTab from '@/components/MarketingSettingsTab';
 import { useRealtimeOrders } from '@/hooks/useRealtimeOrders';
+import { getSafeImageUrl } from '@/lib/imageUtils';
 
 interface Props {
   currentUser?: {
@@ -1917,7 +1918,7 @@ export default function AdminDashboard({
                   >
                     <div className="flex gap-3 items-start">
                       <img
-                        src={p.image}
+                        src={getSafeImageUrl(p.image)}
                         alt={p.name}
                         className="w-16 h-16 object-contain bg-slate-50 rounded-xl p-1 border border-slate-100 flex-shrink-0"
                       />
@@ -2022,7 +2023,7 @@ export default function AdminDashboard({
                     className="flex items-center justify-between gap-3 p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs"
                   >
                     <img
-                      src={item.product.image}
+                      src={getSafeImageUrl(item.product.image)}
                       alt={item.product.name}
                       className="w-10 h-10 object-contain bg-white rounded-lg p-0.5 border border-slate-200 flex-shrink-0"
                     />
@@ -2509,7 +2510,7 @@ export default function AdminDashboard({
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={p.image}
+                            src={getSafeImageUrl(p.image)}
                             alt={p.name}
                             className="w-12 h-12 object-contain bg-white rounded-lg p-1 border border-slate-200 flex-shrink-0"
                           />
@@ -3294,7 +3295,7 @@ export default function AdminDashboard({
                               }`}
                             >
                               <img
-                                src={imgUrl}
+                                src={getSafeImageUrl(imgUrl)}
                                 alt={`Foto ${idx + 1}`}
                                 className="w-full h-24 object-contain rounded-lg bg-slate-50"
                               />
