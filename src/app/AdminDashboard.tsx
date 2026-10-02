@@ -46,6 +46,7 @@ import {
   Image as ImageIcon,
   Key,
   Pencil,
+  Printer,
   Volume2,
   VolumeX,
   BellRing,
@@ -135,6 +136,7 @@ export default function AdminDashboard({
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [uploadingVoucherId, setUploadingVoucherId] = useState<string | null>(null);
+  const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   // Filtros de Órdenes
@@ -1758,6 +1760,15 @@ export default function AdminDashboard({
                               <span>ERP JSON</span>
                             </button>
                           )}
+
+                          <button
+                            onClick={() => setOrderToPrint(order)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-all shadow-2xs active:scale-95"
+                            title="Imprimir Hoja de Despacho & Comprobante de Pedido"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Imprimir</span>
+                          </button>
 
                           <a
                             href={`https://wa.me/${order.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
@@ -3773,6 +3784,279 @@ export default function AdminDashboard({
                   <X className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL / VISTA DE IMPRESIÓN DE DETALLE DE PEDIDO          */}
+      {/* ======================================================== */}
+      {orderToPrint && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          {/* Botones de acción flotantes en pantalla (ocultos al imprimir) */}
+          <div className="fixed top-4 right-4 z-[110] flex items-center gap-2 print:hidden">
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs bg-blue-600 hover:bg-blue-700 text-white shadow-xl transition-all active:scale-95 cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Imprimir / Guardar PDF</span>
+            </button>
+            <button
+              onClick={() => setOrderToPrint(null)}
+              className="p-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 shadow-xl transition-all cursor-pointer"
+              title="Cerrar vista"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* DOCUMENTO IMPRIMIBLE A4 / TICKET DE DESPACHO */}
+          <div
+            id="printable-order-ticket"
+            className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 sm:p-10 my-auto text-slate-800 text-xs border border-slate-200 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:rounded-none"
+          >
+            {/* ENCABEZADO FISCAL */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 border-b-2 border-slate-900 gap-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo-darwin.png"
+                  alt="La Casa De Los Artefactos"
+                  className="h-14 w-auto object-contain"
+                />
+                <div>
+                  <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                    La Casa De Los Artefactos
+                  </h2>
+                  <p className="text-[11px] font-bold text-slate-600">
+                    CORPORACION DARWIN COMPANY S.A.C.
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Venta especializada de electrodomésticos y tecnología
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Lima, Perú • Web: lacasadelosartefactos.pe
+                  </p>
+                </div>
+              </div>
+
+              {/* RECUADRO TIPO DE COMPROBANTE SUNAT */}
+              <div className="border-2 border-slate-900 rounded-xl p-3 text-center min-w-[220px] bg-slate-50/50">
+                <span className="text-[11px] font-mono font-bold block text-slate-700">
+                  R.U.C. 20608943813
+                </span>
+                <span className="text-xs font-black uppercase text-blue-900 block my-0.5 tracking-wide">
+                  {orderToPrint.customerDocType === 'RUC' || orderToPrint.customerFiscalName
+                    ? 'FACTURA ELECTRÓNICA'
+                    : 'BOLETA DE VENTA ELECTRÓNICA'}
+                </span>
+                <span className="text-sm font-mono font-black text-slate-900 block">
+                  N° {orderToPrint.orderNumber}
+                </span>
+              </div>
+            </div>
+
+            {/* METADATOS: CLIENTE, COMPROBANTE Y DESPACHO */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 border-b border-slate-200">
+              {/* Columna Izquierda: Datos del Cliente */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 block">
+                  Datos del Cliente & Facturación
+                </span>
+                <div>
+                  <span className="text-slate-500 font-medium">Cliente / Razón Social: </span>
+                  <strong className="text-slate-900">
+                    {orderToPrint.customerFiscalName || orderToPrint.customerName}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-medium">Documento ({orderToPrint.customerDocType}): </span>
+                  <span className="font-mono font-bold text-slate-900">{orderToPrint.customerDocNumber}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-medium">Teléfono: </span>
+                  <span className="text-slate-800">{orderToPrint.customerPhone}</span>
+                  {orderToPrint.customerEmail && (
+                    <span className="text-slate-500 text-[10px]"> • {orderToPrint.customerEmail}</span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-slate-500 font-medium">Tipo Comprobante: </span>
+                  <strong className="px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[10px] uppercase">
+                    {orderToPrint.customerDocType === 'RUC' || orderToPrint.customerFiscalName ? 'FACTURA' : 'BOLETA'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Columna Derecha: Entrega y Asesor */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                  Datos de Envío & Despacho
+                </span>
+                <div>
+                  <span className="text-slate-500 font-medium">Modalidad: </span>
+                  <strong className="text-slate-900">
+                    {orderToPrint.deliveryType === 'STORE_PICKUP' ? 'Retiro en Tienda / Almacén' : 'Despacho a Domicilio'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-medium">Dirección: </span>
+                  <span className="text-slate-900 font-semibold">{orderToPrint.shippingAddress}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 font-medium">Ciudad / Distrito: </span>
+                  <span className="text-slate-800">
+                    {orderToPrint.shippingCity || 'Lima'} {orderToPrint.shippingDistrict ? `• ${orderToPrint.shippingDistrict}` : ''}
+                  </span>
+                </div>
+                {orderToPrint.shippingReference && (
+                  <div>
+                    <span className="text-slate-500 font-medium">Referencia: </span>
+                    <span className="text-slate-700 italic">{orderToPrint.shippingReference}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-500 font-medium">Asesor Comercial: </span>
+                  <strong className="text-indigo-800">
+                    {orderToPrint.assignedAdvisorName || 'Venta Online Directa'}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* TABLA DE PRODUCTOS */}
+            <div className="py-4">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-2">
+                Detalle de Artefactos del Hogar
+              </span>
+              <table className="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
+                <thead className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                  <tr>
+                    <th className="py-2 px-3 font-bold text-center w-10">#</th>
+                    <th className="py-2 px-3 font-bold text-center w-12">Cant.</th>
+                    <th className="py-2 px-3 font-bold">Artefacto / Marca</th>
+                    <th className="py-2 px-3 font-bold font-mono">SKU</th>
+                    <th className="py-2 px-3 font-bold text-right">P. Unitario</th>
+                    <th className="py-2 px-3 font-bold text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {orderToPrint.items?.map((it: any, idx: number) => {
+                    const price = Number(it.price || it.unitPrice || 0);
+                    const qty = Number(it.quantity || 1);
+                    const sub = Number(it.subtotal || price * qty);
+                    return (
+                      <tr key={it.id || idx}>
+                        <td className="py-2 px-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="py-2 px-3 text-center font-bold text-slate-900 bg-slate-50/50">
+                          {qty}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="font-bold text-slate-900 block">{it.productBrand} {it.productName}</span>
+                          <span className="text-[10px] text-slate-500">
+                            {it.productCategory} • Garantía oficial: {it.warrantyMonths || 12} meses
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-slate-500">
+                          {it.productSku || it.sku || '-'}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-slate-700">
+                          S/ {price.toFixed(2)}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                          S/ {sub.toFixed(2)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* RESUMEN ECONÓMICO Y ESTADO DE PAGO */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 pb-5 border-t border-slate-200">
+              <div className="space-y-1.5 text-[11px]">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                  Condición Financiera
+                </span>
+                <div>
+                  <span className="text-slate-500">Forma de Pago: </span>
+                  <strong className="text-slate-900 uppercase">{orderToPrint.paymentMethod}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500">Estado de Pago: </span>
+                  <span
+                    className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                      orderToPrint.paymentStatus === 'VALIDATED'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {orderToPrint.paymentStatus === 'VALIDATED' ? '✓ PAGO CONFORME / VALIDADO' : 'POR VALIDAR'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Estado en Almacén: </span>
+                  <span className="font-semibold text-slate-800">
+                    {orderToPrint.stockDeducted ? 'Descargado de Bodega' : 'Retenido en Bodega'}
+                  </span>
+                </div>
+                {orderToPrint.customerNotes && (
+                  <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200">
+                    <span className="font-bold text-slate-700 block text-[10px]">Observaciones del Cliente:</span>
+                    <span className="italic text-slate-600">{orderToPrint.customerNotes}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Cuadro de Totales */}
+              <div className="space-y-1 text-right text-xs">
+                <div className="flex justify-between py-0.5">
+                  <span className="text-slate-500">Op. Gravada (Subtotal):</span>
+                  <span className="font-mono text-slate-700">
+                    S/ {(orderToPrint.totalAmount / 1.18).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-slate-500">I.G.V. (18%):</span>
+                  <span className="font-mono text-slate-700">
+                    S/ {(orderToPrint.totalAmount - orderToPrint.totalAmount / 1.18).toFixed(2)}
+                  </span>
+                </div>
+                {orderToPrint.shippingCost > 0 && (
+                  <div className="flex justify-between py-0.5">
+                    <span className="text-slate-500">Costo de Envío:</span>
+                    <span className="font-mono text-slate-700">
+                      S/ {Number(orderToPrint.shippingCost).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between py-2 border-t-2 border-slate-900 text-sm font-black">
+                  <span className="text-slate-900 uppercase">Total a Pagar:</span>
+                  <span className="font-mono text-blue-700 text-base">
+                    S/ {Number(orderToPrint.totalAmount).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN DE FIRMAS PARA ALMACÉN Y TRANSPORTE */}
+            <div className="pt-8 grid grid-cols-2 gap-8 text-center text-[10px] text-slate-600">
+              <div className="border-t border-slate-400 pt-2">
+                <p className="font-bold text-slate-800">Despachado por (Almacén)</p>
+                <p className="text-slate-400">Corporación Darwin S.A.C.</p>
+              </div>
+              <div className="border-t border-slate-400 pt-2">
+                <p className="font-bold text-slate-800">Recibido Conforme (Cliente)</p>
+                <p className="text-slate-400">Firma, Nombre y DNI</p>
+              </div>
+            </div>
+
+            {/* PIE DE PÁGINA */}
+            <div className="mt-8 pt-3 border-t border-slate-200 text-center text-[9px] text-slate-400">
+              <p>Este documento acredita el pedido emitido por la plataforma oficial de La Casa De Los Artefactos.</p>
+              <p>Fecha de emisión: {new Date().toLocaleString('es-PE')} • Corporación Darwin Company S.A.C.</p>
             </div>
           </div>
         </div>
