@@ -42,6 +42,7 @@ export default async function AdminPage() {
   // Obtener data directamente de PostgreSQL con límites de seguridad y agregaciones
   const [
     products,
+    brands,
     orders,
     stockMovements,
     users,
@@ -59,6 +60,9 @@ export default async function AdminPage() {
     prisma.product.findMany({
       orderBy: { createdAt: 'desc' },
       take: 100, // Carga inicial rápida de los 100 productos más recientes
+    }),
+    prisma.brand.findMany({
+      orderBy: [{ order: 'asc' }, { name: 'asc' }],
     }),
     prisma.order.findMany({
       where: orderWhere,
@@ -127,6 +131,7 @@ export default async function AdminPage() {
       <AdminDashboard
         currentUser={session.user as any}
         initialProducts={products as any}
+        initialBrands={brands as any}
         initialOrders={orders as any}
         initialMovements={stockMovements as any}
         initialUsers={users as any}

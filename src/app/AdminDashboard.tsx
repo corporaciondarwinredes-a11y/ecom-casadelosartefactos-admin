@@ -54,6 +54,7 @@ import {
   ZoomIn,
   ZoomOut,
   ExternalLink,
+  Tag,
 } from 'lucide-react';
 
 import MarketingSettingsTab from '@/components/MarketingSettingsTab';
@@ -77,6 +78,7 @@ interface Props {
     };
   };
   initialProducts: any[];
+  initialBrands?: any[];
   initialOrders: any[];
   initialMovements: any[];
   initialUsers?: any[];
@@ -103,6 +105,7 @@ interface AssistedCartItem {
 export default function AdminDashboard({
   currentUser,
   initialProducts,
+  initialBrands = [],
   initialOrders,
   initialMovements,
   initialUsers = [],
@@ -132,9 +135,10 @@ export default function AdminDashboard({
 
   // Tab inicial según perfil
   const defaultTab = !canCatalog && canOrders ? 'manualOrder' : 'orders';
-  const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'kardex' | 'manualOrder' | 'users' | 'marketing'>(defaultTab);
+  const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'brands' | 'kardex' | 'manualOrder' | 'users' | 'marketing'>(defaultTab);
 
   const [products, setProducts] = useState(initialProducts);
+  const [brands, setBrands] = useState(initialBrands);
   const [orders, setOrders] = useState(initialOrders);
   const [movements, setMovements] = useState(initialMovements);
   const [adminUsers, setAdminUsers] = useState(initialUsers);
@@ -154,12 +158,32 @@ export default function AdminDashboard({
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [orderSearchTerm, setOrderSearchTerm] = useState<string>('');
 
-  // Filtros de Catálogo y Kardex
+  // Filtros de Catálogo, Marcas y Kardex
   const [catalogSearch, setCatalogSearch] = useState<string>('');
+  const [brandSearch, setBrandSearch] = useState<string>('');
   const [kardexProductFilter, setKardexProductFilter] = useState<string>('ALL');
 
   // Modales
   const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<any | null>(null);
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [editingBrand, setEditingBrand] = useState<any | null>(null);
+  const [brandForm, setBrandForm] = useState({
+    name: '',
+    description: '',
+    category: 'TELEVISORES',
+    order: 0,
+    isActive: true,
+    logo: '',
+  });
+
+  // Modal para Cambiar Estado de Pedido y Revertir Validación
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [changingStatusOrder, setChangingStatusOrder] = useState<any | null>(null);
+  const [newOrderStatus, setNewOrderStatus] = useState<string>('PENDING');
+  const [newPaymentStatus, setNewPaymentStatus] = useState<string>('PENDING_VALIDATION');
+  const [statusChangeReason, setStatusChangeReason] = useState<string>('');
+
   const [showKardexModal, setShowKardexModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [successOrderModal, setSuccessOrderModal] = useState<any | null>(null);
@@ -366,15 +390,17 @@ export default function AdminDashboard({
   // Refrescar todos los datos
   const refreshAllData = async () => {
     try {
-      const [resProd, resOrd, resMov] = await Promise.all([
+      const [resProd, resOrd, resMov, resBrands] = await Promise.all([
         fetch('/api/products'),
         fetch('/api/orders'),
         fetch('/api/stock-audits'),
+        fetch('/api/brands'),
       ]);
 
       if (resProd.ok) setProducts(await resProd.json());
       if (resOrd.ok) setOrders(await resOrd.json());
       if (resMov.ok) setMovements(await resMov.json());
+      if (resBrands.ok) setBrands(await resBrands.json());
 
       if (isSuperadmin) {
         const resUsers = await fetch('/api/users');
@@ -696,35 +722,54 @@ export default function AdminDashboard({
     }
   };
 
-  // Exportar JSON UBL 2.1 para ERP
-  const handleExportErp = async (orderId: string, orderNumber: string) => {
-    setLoadingAction(`export-${orderId}`);
+  // Modificar Estado Operacional / Financiero del Pedido y Reversión de Validación
+  const handleUpdateOrderStatus = async (
+    orderId: string,
+    targetStatus: string,
+    targetPaymentStatus: string,
+    reason?: string
+  ) => {
+    if (!canValidatePayments) {
+      alert('Acceso Denegado: Su perfil no tiene autorización para modificar estados de pedidos ni inventario.');
+      return;
+    }
+
+    setLoadingAction(`status-${orderId}`);
     try {
-      const res = await fetch(`/api/orders/${orderId}/export-erp`, {
-        method: 'POST',
+      const res = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: targetStatus,
+          paymentStatus: targetPaymentStatus,
+          reason,
+        }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        alert(`Error al exportar: ${data.error}`);
+        alert(`Error al actualizar estado: ${data.error}`);
         return;
       }
 
-      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-        JSON.stringify(data.payload, null, 2)
-      )}`;
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute('href', jsonString);
-      downloadAnchor.setAttribute('download', data.filename || `ERP_${orderNumber}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
+      setFeedbackMessage(
+        data.stockReverted
+          ? '✓ Validación corregida: el stock ha sido devuelto a bodega e ingresado en Kardex.'
+          : data.stockDeducted
+          ? '✓ Pago validado y stock descargado de bodega exitosamente.'
+          : '✓ Estado del pedido actualizado exitosamente.'
+      );
+      setTimeout(() => setFeedbackMessage(null), 3500);
 
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, erpExported: true } : o))
+        prev.map((o) => (o.id === orderId ? { ...o, ...data.order } : o))
       );
+
+      setShowStatusModal(false);
+      setChangingStatusOrder(null);
+      refreshAllData();
     } catch (e: any) {
-      alert('Error en la exportación ERP');
+      alert('Error de conexión al actualizar el pedido');
     } finally {
       setLoadingAction(null);
     }
@@ -855,70 +900,248 @@ export default function AdminDashboard({
     }
   };
 
-  // Crear Producto en Catálogo
-  const handleCreateProduct = async (e: React.FormEvent) => {
+  // Iniciar Edición de Producto
+  const handleEditProduct = (prod: any) => {
+    setEditingProduct(prod);
+    const prodImages = Array.isArray(prod.images) && prod.images.length > 0
+      ? prod.images.map((i: any) => (typeof i === 'string' ? i : i.url))
+      : (prod.image ? [prod.image] : []);
+
+    setNewProduct({
+      name: prod.name || '',
+      brand: prod.brand || 'Samsung',
+      category: prod.category || 'TELEVISORES',
+      modelCode: prod.modelCode || '',
+      sku: prod.sku || '',
+      barcode: prod.barcode || '',
+      retailPrice: prod.retailPrice || prod.price || 0,
+      price: prod.price || 0,
+      stock: prod.stock || 0,
+      energyRating: prod.energyRating || 'A+',
+      voltage: prod.voltage || '220V / 60Hz',
+      dimensions: prod.dimensions || '',
+      weightKg: prod.weightKg || 0,
+      warrantyMonths: prod.warrantyMonths || 12,
+      image: prod.image || (prodImages[0] || ''),
+      images: prodImages,
+      description: prod.description || '',
+      specifications: prod.specifications || '',
+      isFeatured: Boolean(prod.isFeatured),
+    });
+    setProductUploadList([]);
+    setShowProductModal(true);
+  };
+
+  // Iniciar Creación de Producto Nuevo
+  const handleOpenNewProductModal = () => {
+    setEditingProduct(null);
+    setNewProduct({
+      name: '',
+      brand: brands[0]?.name || 'Samsung',
+      category: 'TELEVISORES',
+      modelCode: '',
+      sku: '',
+      barcode: '',
+      retailPrice: 0,
+      price: 0,
+      stock: 5,
+      energyRating: 'A+',
+      voltage: '220V / 60Hz',
+      dimensions: '',
+      weightKg: 0,
+      warrantyMonths: 12,
+      image: '',
+      images: [],
+      description: '',
+      specifications: '',
+      isFeatured: false,
+    });
+    setProductUploadList([]);
+    setShowProductModal(true);
+  };
+
+  // Guardar (Crear o Actualizar) Producto en Catálogo
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoadingAction('create-product');
+    setLoadingAction('save-product');
 
     try {
-      const generatedSlug = (newProduct.brand + '-' + newProduct.name)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') + '-' + Date.now().toString().slice(-4);
-
       const mainImage = newProduct.image || (newProduct.images.length > 0 ? newProduct.images[0] : '');
-      if (!mainImage || newProduct.images.length === 0) {
+      if (!mainImage && newProduct.images.length === 0) {
         alert('Por favor sube al menos una foto del producto desde tu PC.');
         setLoadingAction(null);
         return;
       }
 
-      const res = await fetch('/api/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newProduct,
-          image: mainImage,
-          images: newProduct.images.length > 0 ? newProduct.images : [mainImage],
-          slug: generatedSlug,
-        }),
-      });
+      if (editingProduct) {
+        // ACTUALIZAR PRODUCTO EXISTENTE (PUT /api/products/[id])
+        const res = await fetch(`/api/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...newProduct,
+            image: mainImage,
+            images: newProduct.images.length > 0 ? newProduct.images : [mainImage],
+          }),
+        });
 
-      const data = await res.json();
-      if (!res.ok) {
-        alert(`Error al registrar artefacto: ${data.error}`);
-        return;
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Error al actualizar artefacto: ${data.error}`);
+          return;
+        }
+
+        setFeedbackMessage(`¡Artefacto "${data.product.name}" actualizado correctamente en el catálogo!`);
+        setTimeout(() => setFeedbackMessage(null), 3500);
+
+        setProducts((prev) =>
+          prev.map((p) => (p.id === editingProduct.id ? data.product : p))
+        );
+      } else {
+        // CREAR NUEVO PRODUCTO (POST /api/products)
+        const generatedSlug = (newProduct.brand + '-' + newProduct.name)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') + '-' + Date.now().toString().slice(-4);
+
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...newProduct,
+            image: mainImage,
+            images: newProduct.images.length > 0 ? newProduct.images : [mainImage],
+            slug: generatedSlug,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Error al registrar artefacto: ${data.error}`);
+          return;
+        }
+
+        setFeedbackMessage(`¡Artefacto "${data.name}" registrado en catálogo con ${newProduct.images.length || 1} fotos e inicializado en Kardex!`);
+        setTimeout(() => setFeedbackMessage(null), 3500);
+
+        setProducts((prev) => [data, ...prev]);
       }
 
-      setFeedbackMessage(`¡Artefacto "${data.name}" registrado en catálogo con ${newProduct.images.length || 1} fotos e inicializado en Kardex!`);
-      setTimeout(() => setFeedbackMessage(null), 3500);
-
       setShowProductModal(false);
+      setEditingProduct(null);
       setProductUploadList([]);
-      setNewProduct({
-        name: '',
-        brand: 'Samsung',
-        category: 'TELEVISORES',
-        modelCode: '',
-        sku: '',
-        barcode: '',
-        retailPrice: 0,
-        price: 0,
-        stock: 5,
-        energyRating: 'A+',
-        voltage: '220V / 60Hz',
-        dimensions: '',
-        weightKg: 0,
-        warrantyMonths: 12,
-        image: '',
-        images: [],
-        description: '',
-        specifications: '',
-        isFeatured: false,
-      });
       refreshAllData();
     } catch (err: any) {
-      alert('Error al registrar el artefacto.');
+      alert('Error al guardar el artefacto.');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // Eliminar Producto
+  const handleDeleteProduct = async (productId: string, productName: string) => {
+    if (!canCatalog) return;
+    if (!confirm(`¿Estás seguro de eliminar el artefacto "${productName}" del catálogo?`)) return;
+
+    setLoadingAction(`delete-prod-${productId}`);
+    try {
+      const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Error al eliminar producto');
+        return;
+      }
+      setFeedbackMessage(data.message || 'Artefacto procesado exitosamente.');
+      setTimeout(() => setFeedbackMessage(null), 3500);
+      refreshAllData();
+    } catch (e) {
+      alert('Error de conexión al eliminar producto');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  // OPERACIONES DE MARCAS
+  const handleSaveBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandForm.name.trim()) return;
+
+    setLoadingAction('save-brand');
+    try {
+      if (editingBrand) {
+        const res = await fetch('/api/brands', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingBrand.id, ...brandForm }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Error al actualizar marca');
+          return;
+        }
+        setFeedbackMessage(`✓ Marca "${data.name}" actualizada exitosamente.`);
+        setBrands((prev) => prev.map((b) => (b.id === editingBrand.id ? data : b)));
+      } else {
+        const res = await fetch('/api/brands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(brandForm),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Error al registrar marca');
+          return;
+        }
+        setFeedbackMessage(`✓ Marca "${data.name}" registrada en el sistema oficial.`);
+        setBrands((prev) => [...prev, data]);
+      }
+      setTimeout(() => setFeedbackMessage(null), 3500);
+      setShowBrandModal(false);
+      setEditingBrand(null);
+      setBrandForm({ name: '', description: '', category: 'TELEVISORES', order: 0, isActive: true, logo: '' });
+    } catch (err) {
+      alert('Error al guardar marca');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleDeleteBrand = async (brandId: string, brandName: string) => {
+    if (!confirm(`¿Eliminar la marca "${brandName}" del registro oficial?`)) return;
+    setLoadingAction(`delete-brand-${brandId}`);
+    try {
+      const res = await fetch(`/api/brands?id=${brandId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Error al eliminar marca');
+        return;
+      }
+      setFeedbackMessage(`✓ Marca "${brandName}" eliminada del registro.`);
+      setTimeout(() => setFeedbackMessage(null), 3500);
+      setBrands((prev) => prev.filter((b) => b.id !== brandId));
+    } catch (err) {
+      alert('Error al eliminar marca');
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleToggleBrandActive = async (brandId: string, currentActive: boolean) => {
+    setLoadingAction(`toggle-brand-${brandId}`);
+    try {
+      const res = await fetch('/api/brands', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: brandId, isActive: !currentActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Error al modificar estado de la marca');
+        return;
+      }
+      setBrands((prev) => prev.map((b) => (b.id === brandId ? { ...b, isActive: !currentActive } : b)));
+    } catch (err) {
+      alert('Error de conexión');
     } finally {
       setLoadingAction(null);
     }
@@ -1236,66 +1459,54 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* KPIS DIRECTIVOS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+      {/* KPIS EJECUTIVOS COMPACTOS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Ventas Validadas</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
+            <span className="text-xs text-slate-500 font-semibold">Ventas Validadas</span>
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl font-black text-slate-900 mt-2">
+          <p className="text-lg font-black text-slate-900 mt-1">
             S/ {kpis.totalSales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
           </p>
-          <span className="text-[10px] text-emerald-700 font-semibold mt-1 block">
-            Acreditado en cuentas bancarias
-          </span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Por Validar Pago</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
+            <span className="text-xs text-slate-500 font-semibold">Por Validar Pago</span>
+            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl font-black text-amber-700 mt-2">
+          <p className="text-lg font-black text-amber-700 mt-1">
             {kpis.pendingValidationCount} pedidos
           </p>
-          <span className="text-[10px] text-amber-600 font-semibold mt-1 block">
-            Stock retenido en espera
-          </span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Stock Central</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Boxes className="w-4 h-4" />
+            <span className="text-xs text-slate-500 font-semibold">Stock Central</span>
+            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Boxes className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl font-black text-slate-900 mt-2">
-            {kpis.totalStockUnits} unidades
+          <p className="text-lg font-black text-slate-900 mt-1">
+            {kpis.totalStockUnits} unidades ({products.length} artefactos)
           </p>
-          <span className="text-[10px] text-blue-600 font-semibold mt-1 block">
-            {products.length} artefactos registrados
-          </span>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Stock Crítico</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-              <ShieldAlert className="w-4 h-4" />
+            <span className="text-xs text-slate-500 font-semibold">Stock Crítico (≤ 5)</span>
+            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <ShieldAlert className="w-3.5 h-3.5" />
             </div>
           </div>
-          <p className="text-xl font-black text-rose-700 mt-2">
+          <p className="text-lg font-black text-rose-700 mt-1">
             {kpis.lowStockAlerts} modelos
           </p>
-          <span className="text-[10px] text-rose-600 font-semibold mt-1 block">
-            Menos de 5 unidades en bodega
-          </span>
         </div>
       </div>
 
@@ -1349,6 +1560,21 @@ export default function AdminDashboard({
             >
               <Package className="w-4 h-4" />
               <span>Catálogo ({products.length})</span>
+            </button>
+          )}
+
+          {/* 4. REGISTRO DE MARCAS OFICIALES (Visible si canCatalog) */}
+          {canCatalog && (
+            <button
+              onClick={() => setActiveTab('brands')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
+                activeTab === 'brands'
+                  ? 'bg-blue-900 text-white shadow-md shadow-blue-900/20'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <Tag className="w-4 h-4 text-amber-500" />
+              <span>Registro de Marcas ({brands.length})</span>
             </button>
           )}
 
@@ -1737,44 +1963,41 @@ export default function AdminDashboard({
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
-                          {/* BOTÓN VALIDAR PAGO: Solo con privilegio canValidatePayments */}
-                          {!isValidated && (
-                            canValidatePayments ? (
-                              <button
-                                onClick={() => handleValidatePayment(order.id)}
-                                disabled={loadingAction === `validate-${order.id}`}
-                                className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-all shadow-sm active:scale-95"
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                <span>{loadingAction === `validate-${order.id}` ? 'Validando...' : 'Validar Pago'}</span>
-                              </button>
-                            ) : (
-                              <span
-                                className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200"
-                                title="Solo Tesorería o Superadmin pueden validar pagos"
-                              >
-                                <Lock className="w-2.5 h-2.5" />
-                                <span>Tesorería</span>
-                              </span>
-                            )
+                        <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                          {/* BOTÓN RÁPIDO VALIDAR PAGO: Si no está validado aún */}
+                          {!isValidated && canValidatePayments && (
+                            <button
+                              onClick={() => handleValidatePayment(order.id)}
+                              disabled={loadingAction === `validate-${order.id}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg transition-all shadow-sm active:scale-95 cursor-pointer"
+                              title="Aprobar pago bancario y descargar existencias físicas de almacén"
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                              <span>{loadingAction === `validate-${order.id}` ? 'Validando...' : 'Validar Pago'}</span>
+                            </button>
                           )}
 
-                          {canErpExport && (
+                          {/* BOTÓN CAMBIAR ESTADO / CORREGIR VALIDACIÓN (Siempre disponible si tiene permisos) */}
+                          {canValidatePayments && (
                             <button
-                              onClick={() => handleExportErp(order.id, order.orderNumber)}
-                              disabled={loadingAction === `export-${order.id}`}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-all"
-                              title="Exportar archivo UBL 2.1 para Facturación SUNAT"
+                              onClick={() => {
+                                setChangingStatusOrder(order);
+                                setNewOrderStatus(order.status);
+                                setNewPaymentStatus(order.paymentStatus);
+                                setStatusChangeReason('');
+                                setShowStatusModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-lg transition-all active:scale-95 cursor-pointer shadow-2xs"
+                              title="Cambiar estado del pedido o revertir validación errónea"
                             >
-                              <Download className="w-3 h-3 text-slate-600" />
-                              <span>ERP JSON</span>
+                              <Pencil className="w-3 h-3 text-slate-500" />
+                              <span>Estado</span>
                             </button>
                           )}
 
                           <button
                             onClick={() => setOrderToPrint(order)}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-all shadow-2xs active:scale-95"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1.5 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer"
                             title="Imprimir Hoja de Despacho & Comprobante de Pedido"
                           >
                             <Printer className="w-3.5 h-3.5 text-blue-600" />
@@ -2474,8 +2697,8 @@ export default function AdminDashboard({
               </div>
 
               <button
-                onClick={() => setShowProductModal(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap"
+                onClick={handleOpenNewProductModal}
+                className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>+ Registrar Nuevo Artefacto</span>
@@ -2494,6 +2717,7 @@ export default function AdminDashboard({
                   <th className="py-3 px-4 font-bold text-center">Stock Físico</th>
                   <th className="py-3 px-4 font-bold text-center">Calibrador Rápido</th>
                   <th className="py-3 px-4 font-bold text-center">Visibilidad Tienda</th>
+                  <th className="py-3 px-4 font-bold text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2618,6 +2842,183 @@ export default function AdminDashboard({
                                 <span>{loadingAction === `availability-${p.id}` ? 'Activando...' : 'Activar'}</span>
                               </>
                             )}
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleEditProduct(p)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all active:scale-95 shadow-2xs cursor-pointer"
+                            title="Editar ficha técnica, precios, stock y fotos"
+                          >
+                            <Pencil className="w-3 h-3 text-blue-600" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProduct(p.id, p.name)}
+                            disabled={loadingAction === `delete-prod-${p.id}`}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar del catálogo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* PESTAÑA: REGISTRO OFICIAL DE MARCAS */}
+      {/* ======================================================== */}
+      {activeTab === 'brands' && canCatalog && (
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded uppercase">
+                  Gestión Corporativa
+                </span>
+                <span className="text-[11px] text-slate-400">Catálogo & Sidebar</span>
+              </div>
+              <h2 className="text-base font-bold text-slate-900 mt-1">
+                Registro Oficial de Marcas de Artefactos
+              </h2>
+              <p className="text-xs text-slate-500">
+                Administra las marcas autorizadas que se desplegarán en el buscador de la tienda y en los filtros de productos.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={brandSearch}
+                  onChange={(e) => setBrandSearch(e.target.value)}
+                  placeholder="Buscar marca registrada..."
+                  className="w-full text-xs pl-9 pr-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingBrand(null);
+                  setBrandForm({
+                    name: '',
+                    description: '',
+                    category: 'TELEVISORES',
+                    order: brands.length,
+                    isActive: true,
+                    logo: '',
+                  });
+                  setShowBrandModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Registrar Nueva Marca</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TABLA DE MARCAS */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500 bg-slate-50/70">
+                  <th className="py-3 px-4 font-bold text-center w-16"># Orden</th>
+                  <th className="py-3 px-4 font-bold">Marca</th>
+                  <th className="py-3 px-4 font-bold">Departamento Principal</th>
+                  <th className="py-3 px-4 font-bold">Descripción Técnica & Líneas</th>
+                  <th className="py-3 px-4 font-bold text-center">Estado</th>
+                  <th className="py-3 px-4 font-bold text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {brands
+                  .filter(
+                    (b) =>
+                      !brandSearch ||
+                      b.name?.toLowerCase().includes(brandSearch.toLowerCase()) ||
+                      b.description?.toLowerCase().includes(brandSearch.toLowerCase())
+                  )
+                  .map((b) => (
+                    <tr key={b.id || b.name} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400">
+                        {b.order ?? 0}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center font-black text-xs">
+                            {b.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-900 block text-xs">{b.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">/{b.slug}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                          {b.category || 'MULTICATEGORÍA'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
+                        {b.description || 'Sin notas descriptivas'}
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBrandActive(b.id, b.isActive !== false)}
+                          disabled={loadingAction === `toggle-brand-${b.id}`}
+                          className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                            b.isActive !== false
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                          }`}
+                        >
+                          {b.isActive !== false ? '✓ Activa' : 'Pausada'}
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingBrand(b);
+                              setBrandForm({
+                                name: b.name,
+                                description: b.description || '',
+                                category: b.category || 'TELEVISORES',
+                                order: b.order || 0,
+                                isActive: b.isActive !== false,
+                                logo: b.logo || '',
+                              });
+                              setShowBrandModal(true);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all cursor-pointer"
+                            title="Editar detalles de la marca"
+                          >
+                            <Pencil className="w-3 h-3 text-blue-600" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBrand(b.id, b.name)}
+                            disabled={loadingAction === `delete-brand-${b.id}`}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Eliminar marca"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -3001,15 +3402,28 @@ export default function AdminDashboard({
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 my-8">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-black text-slate-900">Registrar Nuevo Artefacto en Catálogo</h3>
-                <p className="text-xs text-slate-500">Se inicializará automáticamente el primer asiento de Kardex.</p>
+                <h3 className="text-base font-black text-slate-900">
+                  {editingProduct ? 'Editar Ficha Técnica del Artefacto' : 'Registrar Nuevo Artefacto en Catálogo'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {editingProduct
+                    ? `Modificando especificaciones de "${editingProduct.name}" (SKU: ${editingProduct.sku})`
+                    : 'Se inicializará automáticamente el primer asiento de Kardex.'}
+                </p>
               </div>
-              <button onClick={() => setShowProductModal(false)} className="p-1 rounded-lg text-slate-400 hover:text-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProductModal(false);
+                  setEditingProduct(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 text-xs">
+            <form onSubmit={handleSaveProduct} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block font-bold text-slate-700 mb-1">Nombre Completo del Artefacto *</label>
@@ -3024,21 +3438,20 @@ export default function AdminDashboard({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Marca *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Marca Oficial *</label>
                   <select
                     value={newProduct.brand}
                     onChange={(e) => setNewProduct({ ...newProduct, brand: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    className="w-full p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
                   >
-                    <option value="Samsung">Samsung</option>
-                    <option value="LG">LG</option>
-                    <option value="Bosch">Bosch</option>
-                    <option value="Mabe">Mabe</option>
-                    <option value="Indurama">Indurama</option>
-                    <option value="Sole">Sole</option>
-                    <option value="Electrolux">Electrolux</option>
-                    <option value="Sony">Sony</option>
-                    <option value="Oster">Oster</option>
+                    {brands.map((b) => (
+                      <option key={b.id || b.name} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                    {!brands.some((b) => b.name === newProduct.brand) && newProduct.brand && (
+                      <option value={newProduct.brand}>{newProduct.brand}</option>
+                    )}
                   </select>
                 </div>
 
@@ -3363,17 +3776,267 @@ export default function AdminDashboard({
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowProductModal(false)}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl"
+                  onClick={() => {
+                    setShowProductModal(false);
+                    setEditingProduct(null);
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={loadingAction === 'create-product'}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow"
+                  disabled={loadingAction === 'save-product'}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow cursor-pointer disabled:opacity-50"
                 >
-                  {loadingAction === 'create-product' ? 'Guardando...' : 'Crear & Registrar en Kardex'}
+                  {loadingAction === 'save-product'
+                    ? 'Guardando...'
+                    : editingProduct
+                    ? 'Guardar Cambios del Artefacto'
+                    : 'Crear & Registrar en Kardex'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REGISTRAR / EDITAR MARCA OFICIAL */}
+      {showBrandModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  {editingBrand ? 'Editar Marca Oficial' : 'Registrar Nueva Marca Oficial'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Configuración para catálogo, filtros y menú lateral
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBrandModal(false);
+                  setEditingBrand(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBrand} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nombre de la Marca *</label>
+                <input
+                  type="text"
+                  required
+                  value={brandForm.name}
+                  onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })}
+                  placeholder="Ej. JBL, Samsung, Indurama..."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Departamento / Categoría Principal</label>
+                <select
+                  value={brandForm.category}
+                  onChange={(e) => setBrandForm({ ...brandForm, category: e.target.value })}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="TELEVISORES">📺 Televisores</option>
+                  <option value="AUDIO">🔊 Audio</option>
+                  <option value="LAVADORAS">🧺 Lavadoras / Secadoras</option>
+                  <option value="REFRIGERADORAS">❄️ Refrigeradoras</option>
+                  <option value="CONGELADORAS">🧊 Congeladoras</option>
+                  <option value="COCINAS_HORNOS">🍳 Cocinas / Hornos</option>
+                  <option value="CLIMATIZACION">💨 Climatización</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Líneas de Productos & Reseña Técnica</label>
+                <textarea
+                  rows={3}
+                  value={brandForm.description}
+                  onChange={(e) => setBrandForm({ ...brandForm, description: e.target.value })}
+                  placeholder="Ej. Parlantes Bluetooth Portátiles Resistentes al Agua IP67, Sistemas PartyBox..."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Orden en Menú</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={brandForm.order}
+                    onChange={(e) => setBrandForm({ ...brandForm, order: Number(e.target.value) })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={brandForm.isActive}
+                      onChange={(e) => setBrandForm({ ...brandForm, isActive: e.target.checked })}
+                      className="w-4 h-4 rounded text-blue-600"
+                    />
+                    <span className="font-bold text-slate-700 text-xs">Marca Activa</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBrandModal(false);
+                    setEditingBrand(null);
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingAction === 'save-brand'}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow cursor-pointer disabled:opacity-50"
+                >
+                  {loadingAction === 'save-brand' ? 'Guardando...' : editingBrand ? 'Actualizar Marca' : 'Registrar Marca'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CAMBIAR ESTADO DE PEDIDO / CORREGIR VALIDACIÓN */}
+      {showStatusModal && changingStatusOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Modificar Estado del Pedido #{changingStatusOrder.orderNumber}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Cliente: {changingStatusOrder.customerName} • Total: S/ {changingStatusOrder.totalAmount?.toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStatusModal(false);
+                  setChangingStatusOrder(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleUpdateOrderStatus(
+                  changingStatusOrder.id,
+                  newOrderStatus,
+                  newPaymentStatus,
+                  statusChangeReason
+                );
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Estado Financiero del Pago *
+                </label>
+                <select
+                  value={newPaymentStatus}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewPaymentStatus(val);
+                    if (val === 'VALIDATED') setNewOrderStatus('PAID');
+                    else if (val === 'PENDING_VALIDATION') setNewOrderStatus('PENDING');
+                    else if (val === 'REJECTED') setNewOrderStatus('CANCELLED');
+                  }}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-bold bg-white text-xs"
+                >
+                  <option value="VALIDATED">✓ PAGO VALIDADO / APROBADO (Descarga stock si no estaba)</option>
+                  <option value="PENDING_VALIDATION">⏳ POR VALIDAR / PENDIENTE (Deshacer validación y devolver stock a bodega)</option>
+                  <option value="REJECTED">❌ RECHAZADO / COMPROBANTE NO VÁLIDO (Devolver stock si estaba retenido)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Estado Operacional / Logístico *
+                </label>
+                <select
+                  value={newOrderStatus}
+                  onChange={(e) => setNewOrderStatus(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 font-bold bg-white text-xs"
+                >
+                  <option value="PENDING">PENDING - Pendiente de Aprobación</option>
+                  <option value="PAID">PAID - Pagado Conforme</option>
+                  <option value="PROCESSING">PROCESSING - En Preparación en Almacén</option>
+                  <option value="SHIPPED">SHIPPED - En Tránsito / Despachado</option>
+                  <option value="DELIVERED">DELIVERED - Entregado al Cliente Conforme</option>
+                  <option value="CANCELLED">CANCELLED - Anulado / Cancelado</option>
+                </select>
+              </div>
+
+              {/* Aviso dinámico sobre impacto en Almacén y Kardex */}
+              {changingStatusOrder.stockDeducted && newPaymentStatus === 'PENDING_VALIDATION' && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 space-y-1">
+                  <p className="font-black text-xs flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>Reversión de Inventario en Bodega</span>
+                  </p>
+                  <p className="text-[11px]">
+                    El stock que fue descargado previamente será devuelto automáticamente a las existencias físicas de cada producto y se registrará un movimiento de retorno en el Kardex.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Motivo o Justificación del Cambio (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={statusChangeReason}
+                  onChange={(e) => setStatusChangeReason(e.target.value)}
+                  placeholder="Ej. Se validó por error, el cliente envió otro voucher, etc."
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-xs"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStatusModal(false);
+                    setChangingStatusOrder(null);
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loadingAction === `status-${changingStatusOrder.id}`}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow cursor-pointer disabled:opacity-50"
+                >
+                  {loadingAction === `status-${changingStatusOrder.id}`
+                    ? 'Actualizando...'
+                    : 'Confirmar Cambio de Estado'}
                 </button>
               </div>
             </form>
