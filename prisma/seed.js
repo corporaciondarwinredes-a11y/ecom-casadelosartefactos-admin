@@ -360,17 +360,146 @@ async function main() {
     });
   }
 
-  // 5. Registrar Log de Auditoría Administrativa
+  // 5. Sembrar Canales de Asesoría Oficiales (WhatsApp Concierge)
+  await prisma.supportChannel.deleteMany();
+  const supportChannelsData = [
+    {
+      name: 'Sandy (Atención 24 Horas)',
+      phone: '977673722',
+      formattedPhone: '+51 977 673 722',
+      roleTitle: 'Asesora Principal - Turno Continuo 24/7',
+      schedule: 'Atención 24 Horas (Lunes a Domingo)',
+      startHour: 0,
+      endHour: 24,
+      autoSchedule: true,
+      isActive: true,
+      order: 1,
+    },
+    {
+      name: 'Antonia',
+      phone: '906361134',
+      formattedPhone: '+51 906 361 134',
+      roleTitle: 'Asesora Especialista en Artefactos y Despacho',
+      schedule: 'Lunes a Sábado: 8:00 AM - 8:00 PM',
+      startHour: 8,
+      endHour: 20,
+      autoSchedule: true,
+      isActive: true,
+      order: 2,
+    },
+    {
+      name: 'Milagros',
+      phone: '994098698',
+      formattedPhone: '+51 994 098 698',
+      roleTitle: 'Asesora Comercial y Cotizaciones',
+      schedule: 'Lunes a Sábado: 8:00 AM - 8:00 PM',
+      startHour: 8,
+      endHour: 20,
+      autoSchedule: true,
+      isActive: true,
+      order: 3,
+    },
+    {
+      name: 'Fabricio',
+      phone: '924773863',
+      formattedPhone: '+51 924 773 863',
+      roleTitle: 'Asesor Técnico y Envíos a Provincia',
+      schedule: 'Lunes a Sábado: 8:00 AM - 8:00 PM',
+      startHour: 8,
+      endHour: 20,
+      autoSchedule: true,
+      isActive: true,
+      order: 4,
+    },
+  ];
+
+  for (const ch of supportChannelsData) {
+    await prisma.supportChannel.create({ data: ch });
+  }
+
+  // 6. Sembrar Banners Oficiales de Categoría
+  await prisma.categoryBanner.deleteMany();
+  const categoryBannersData = [
+    {
+      category: 'TELEVISORES',
+      name: 'Televisores',
+      subtitle: 'QLED, OLED 4K y Mini LED de Última Generación',
+      tag: 'Hasta 35% DCTO',
+      imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 1,
+    },
+    {
+      category: 'AUDIO',
+      name: 'Audio',
+      subtitle: 'Barras de Sonido Dolby Atmos y Equipos',
+      tag: 'Sonido Pro',
+      imageUrl: 'https://images.unsplash.com/photo-1545454675-3531b543be5d?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 2,
+    },
+    {
+      category: 'LAVADORAS',
+      name: 'Lavadoras / Secadoras',
+      subtitle: 'Lavasecas Inteligentes y Carga Frontal',
+      tag: 'Hasta 28% DCTO',
+      imageUrl: 'https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 3,
+    },
+    {
+      category: 'REFRIGERADORAS',
+      name: 'Refrigeradoras',
+      subtitle: 'Side by Side, No Frost y Multi-Door Inverter',
+      tag: 'Hasta 25% DCTO',
+      imageUrl: 'https://images.unsplash.com/photo-1584992236310-6edddc08acff?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 4,
+    },
+    {
+      category: 'CONGELADORAS',
+      name: 'Congeladoras',
+      subtitle: 'Horizontales y Verticales de Gran Capacidad',
+      tag: 'Frío Extremo',
+      imageUrl: 'https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 5,
+    },
+    {
+      category: 'COCINAS_HORNOS',
+      name: 'Cocinas / Hornos',
+      subtitle: 'Empotrables y de Pie de Alta Eficiencia',
+      tag: 'Inducción & Gas',
+      imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 6,
+    },
+    {
+      category: 'CLIMATIZACION',
+      name: 'Climatización',
+      subtitle: 'Aire Acondicionado Split y Portátil Frío/Calor',
+      tag: 'Tecnología Inverter',
+      imageUrl: 'https://images.unsplash.com/photo-1614633833026-0820552978b6?auto=format&fit=crop&w=800&q=80',
+      isActive: true,
+      order: 7,
+    },
+  ];
+
+  for (const banner of categoryBannersData) {
+    await prisma.categoryBanner.create({ data: banner });
+  }
+
+  // 7. Registrar Log de Auditoría Administrativa
   await prisma.adminAuditLog.create({
     data: {
       userId: superadmin.id,
       action: 'INITIAL_SEED',
       resource: 'SISTEMA_COMPLETO',
-      details: 'Base de datos inicializada con 9 artefactos del hogar y perfiles RBAC para Corporación Darwin',
+      details: 'Base de datos en Supabase inicializada con 9 artefactos, 4 asesoras oficiales y 7 categorías para Corporación Darwin',
     },
   });
 
-  console.log('✅ Base de datos casa_artefactos inicializada con éxito.');
+  console.log('✅ Base de datos en Supabase inicializada con éxito.');
   console.log('Credenciales del Superadmin:');
   console.log('Usuario: superadmin@corporaciondarwin.com');
   console.log('Contraseña: DarwinAdmin9438130!');
