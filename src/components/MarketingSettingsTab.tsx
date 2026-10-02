@@ -18,6 +18,8 @@ import {
   Image as ImageIcon,
   UploadCloud,
   RefreshCw,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface Props {
@@ -131,6 +133,54 @@ export default function MarketingSettingsTab({
   const [uploadingCategoryImg, setUploadingCategoryImg] = useState<string | null>(null);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
 
+  // Estado del Modal de Confirmación para Campañas
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => Promise<void> | void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const requestConfirmation = (config: {
+    title: string;
+    description: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => Promise<void> | void;
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title: config.title,
+      description: config.description,
+      confirmText: config.confirmText || 'Confirmar y Guardar',
+      cancelText: config.cancelText || 'Cancelar',
+      isDestructive: config.isDestructive || false,
+      onConfirm: config.onConfirm,
+    });
+  };
+
+  const executeConfirmAction = async () => {
+    setConfirmLoading(true);
+    try {
+      await confirmModal.onConfirm();
+      setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+    } catch (err: any) {
+      console.error('Error executing confirmed action:', err);
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
   const handleUploadCategoryImg = async (category: string, file: File) => {
     if (!file) return;
     setUploadingCategoryImg(category);
@@ -163,37 +213,44 @@ export default function MarketingSettingsTab({
   };
 
   const handleSaveCategoryBanner = async (item: any) => {
-    setSavingCategory(item.category);
-    try {
-      const res = await fetch('/api/settings/category-banners', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: item.id,
-          category: item.category,
-          name: item.name,
-          subtitle: item.subtitle,
-          tag: item.tag,
-          imageUrl: item.imageUrl,
-          isActive: item.isActive,
-        }),
-      });
+    requestConfirmation({
+      title: `¿Confirmar cambios en banner de ${item.name}?`,
+      description: `Se actualizará la imagen, texto y estilo de la categoría "${item.name}" en la portada de la tienda.`,
+      confirmText: 'Guardar Banner',
+      onConfirm: async () => {
+        setSavingCategory(item.category);
+        try {
+          const res = await fetch('/api/settings/category-banners', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: item.id,
+              category: item.category,
+              name: item.name,
+              subtitle: item.subtitle,
+              tag: item.tag,
+              imageUrl: item.imageUrl,
+              isActive: item.isActive,
+            }),
+          });
 
-      const data = await res.json();
-      if (res.ok) {
-        setCategoryBanners((prev) =>
-          prev.map((c) => (c.category === item.category ? { ...c, ...data } : c))
-        );
-        onFeedback(`¡Banner de categoría "${item.name}" guardado exitosamente!`);
-      } else {
-        alert(`Error al guardar banner: ${data.error || 'No se pudo guardar'}`);
-      }
-    } catch (err: any) {
-      console.error('Error saving category banner:', err);
-      alert('Error de conexión al actualizar categoría.');
-    } finally {
-      setSavingCategory(null);
-    }
+          const data = await res.json();
+          if (res.ok) {
+            setCategoryBanners((prev) =>
+              prev.map((c) => (c.category === item.category ? { ...c, ...data } : c))
+            );
+            onFeedback(`¡Banner de categoría "${item.name}" guardado exitosamente!`);
+          } else {
+            alert(`Error al guardar banner: ${data.error || 'No se pudo guardar'}`);
+          }
+        } catch (err: any) {
+          console.error('Error saving category banner:', err);
+          alert('Error de conexión al actualizar categoría.');
+        } finally {
+          setSavingCategory(null);
+        }
+      },
+    });
   };
 
   // Subir imagen del banner directamente a disco local C: con previsualización instantánea
@@ -282,93 +339,123 @@ export default function MarketingSettingsTab({
       return;
     }
 
-    setSavingBanner(true);
-    try {
-      const res = await fetch('/api/settings/banner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newBanner),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+    requestConfirmation({
+      title: '¿Publicar nuevo banner de campaña?',
+      description: `Se agregará el slide "${newBanner.title}" al carrusel principal de la portada.`,
+      confirmText: 'Publicar Banner',
+      onConfirm: async () => {
+        setSavingBanner(true);
+        try {
+          const res = await fetch('/api/settings/banner', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newBanner),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
 
-      setBanners([data.banner, ...banners]);
-      setShowAddBanner(false);
-      setBannerPreview(null);
-      setNewBanner({
-        title: '',
-        subtitle: '',
-        badgeText: 'CAMPAÑA OFICIAL',
-        imageUrl: '',
-        ctaText: 'Ver Promoción',
-        ctaLink: '#catalogo',
-        isActive: true,
-      });
-      onFeedback('¡Nuevo slide añadido al carrusel de banners!');
-    } catch (err: any) {
-      alert(`Error al crear banner: ${err.message}`);
-    } finally {
-      setSavingBanner(false);
-    }
+          setBanners([data.banner, ...banners]);
+          setShowAddBanner(false);
+          setBannerPreview(null);
+          setNewBanner({
+            title: '',
+            subtitle: '',
+            badgeText: 'CAMPAÑA OFICIAL',
+            imageUrl: '',
+            ctaText: 'Ver Promoción',
+            ctaLink: '#catalogo',
+            isActive: true,
+          });
+          onFeedback('¡Nuevo slide añadido al carrusel de banners!');
+        } catch (err: any) {
+          alert(`Error al crear banner: ${err.message}`);
+        } finally {
+          setSavingBanner(false);
+        }
+      },
+    });
   };
 
   // Activar / Desactivar banner
   const handleToggleBanner = async (b: any) => {
     const updatedStatus = !b.isActive;
-    try {
-      const res = await fetch('/api/settings/banner', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: b.id, isActive: updatedStatus }),
-      });
-      if (!res.ok) throw new Error('Error al actualizar');
+    requestConfirmation({
+      title: updatedStatus ? '¿Activar banner de campaña?' : '¿Pausar banner de campaña?',
+      description: updatedStatus
+        ? `El banner "${b.title}" volverá a rotar en el carrusel de la página de inicio.`
+        : `El banner "${b.title}" será pausado y no se mostrará a los clientes.`,
+      confirmText: updatedStatus ? 'Activar Banner' : 'Pausar Banner',
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/settings/banner', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: b.id, isActive: updatedStatus }),
+          });
+          if (!res.ok) throw new Error('Error al actualizar');
 
-      setBanners(
-        banners.map((item) => (item.id === b.id ? { ...item, isActive: updatedStatus } : item))
-      );
-      onFeedback(updatedStatus ? 'Banner activado en el carrusel' : 'Banner pausado del carrusel');
-    } catch (err: any) {
-      alert(`Error al cambiar estado: ${err.message}`);
-    }
+          setBanners(
+            banners.map((item) => (item.id === b.id ? { ...item, isActive: updatedStatus } : item))
+          );
+          onFeedback(updatedStatus ? 'Banner activado en el carrusel' : 'Banner pausado del carrusel');
+        } catch (err: any) {
+          alert(`Error al cambiar estado: ${err.message}`);
+        }
+      },
+    });
   };
 
   // Eliminar slide de banner
   const handleDeleteBanner = async (id: string, title: string) => {
-    if (!confirm(`¿Eliminar el banner "${title}" del carrusel?`)) return;
+    requestConfirmation({
+      title: '¿Eliminar banner de campaña?',
+      description: `¿Estás seguro de eliminar el banner "${title}" del carrusel? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar Banner',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/settings/banner?id=${id}`, {
+            method: 'DELETE',
+          });
+          if (!res.ok) throw new Error('Error al eliminar');
 
-    try {
-      const res = await fetch(`/api/settings/banner?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Error al eliminar');
-
-      setBanners(banners.filter((b) => b.id !== id));
-      onFeedback('Banner eliminado del carrusel.');
-    } catch (err: any) {
-      alert(`Error al eliminar: ${err.message}`);
-    }
+          setBanners(banners.filter((b) => b.id !== id));
+          onFeedback('Banner eliminado del carrusel.');
+        } catch (err: any) {
+          alert(`Error al eliminar: ${err.message}`);
+        }
+      },
+    });
   };
 
   // Guardar Anuncio Superior
   const handleSaveAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingAnnouncement(true);
-    try {
-      const res = await fetch('/api/settings/announcement', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(announcement),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+    requestConfirmation({
+      title: '¿Confirmar actualización del Encabezado de Anuncios?',
+      description:
+        'El mensaje superior, texto destacado y enlaces promocionales se actualizarán en vivo para todos los visitantes.',
+      confirmText: 'Guardar Anuncio',
+      onConfirm: async () => {
+        setSavingAnnouncement(true);
+        try {
+          const res = await fetch('/api/settings/announcement', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(announcement),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
 
-      setAnnouncement(data.announcement);
-      onFeedback('¡Encabezado de anuncios actualizado correctamente!');
-    } catch (err: any) {
-      alert(`Error al guardar anuncio: ${err.message}`);
-    } finally {
-      setSavingAnnouncement(false);
-    }
+          setAnnouncement(data.announcement);
+          onFeedback('¡Encabezado de anuncios actualizado correctamente!');
+        } catch (err: any) {
+          alert(`Error al guardar anuncio: ${err.message}`);
+        } finally {
+          setSavingAnnouncement(false);
+        }
+      },
+    });
   };
 
   // Guardar Nuevo Canal
@@ -379,74 +466,96 @@ export default function MarketingSettingsTab({
       return;
     }
 
-    setSavingChannel(true);
-    try {
-      const res = await fetch('/api/settings/support-channels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newChannel),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+    requestConfirmation({
+      title: '¿Registrar nueva asesora oficial?',
+      description: `Se creará el canal de soporte para "${newChannel.name}" con WhatsApp +51 ${newChannel.phone}.`,
+      confirmText: 'Registrar Asesora',
+      onConfirm: async () => {
+        setSavingChannel(true);
+        try {
+          const res = await fetch('/api/settings/support-channels', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newChannel),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
 
-      setChannels([...channels, data.channel]);
-      setShowAddChannel(false);
-      setNewChannel({
-        name: '',
-        phone: '',
-        formattedPhone: '',
-        roleTitle: '',
-        schedule: 'Lunes a Sábado: 8:00 AM - 8:00 PM',
-        startHour: 8,
-        endHour: 20,
-        autoSchedule: true,
-        isActive: true,
-      });
-      onFeedback(`Línea "${data.channel.name}" creada exitosamente.`);
-    } catch (err: any) {
-      alert(`Error al crear canal: ${err.message}`);
-    } finally {
-      setSavingChannel(false);
-    }
+          setChannels([...channels, data.channel]);
+          setShowAddChannel(false);
+          setNewChannel({
+            name: '',
+            phone: '',
+            formattedPhone: '',
+            roleTitle: '',
+            schedule: 'Lunes a Sábado: 8:00 AM - 8:00 PM',
+            startHour: 8,
+            endHour: 20,
+            autoSchedule: true,
+            isActive: true,
+          });
+          onFeedback(`Línea "${data.channel.name}" creada exitosamente.`);
+        } catch (err: any) {
+          alert(`Error al crear canal: ${err.message}`);
+        } finally {
+          setSavingChannel(false);
+        }
+      },
+    });
   };
 
   // Alternar Activo/Inactivo de Canal
   const handleToggleChannel = async (channel: any) => {
     const updatedStatus = !channel.isActive;
-    try {
-      const res = await fetch('/api/settings/support-channels', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: channel.id, isActive: updatedStatus }),
-      });
-      if (!res.ok) throw new Error('Error al actualizar');
+    requestConfirmation({
+      title: updatedStatus ? '¿Activar asesora comercial?' : '¿Pausar asesora comercial?',
+      description: updatedStatus
+        ? `"${channel.name}" aparecerá disponible para atender clientes y asignar pedidos.`
+        : `"${channel.name}" quedará en modo fuera de línea temporalmente.`,
+      confirmText: updatedStatus ? 'Activar' : 'Pausar',
+      onConfirm: async () => {
+        try {
+          const res = await fetch('/api/settings/support-channels', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: channel.id, isActive: updatedStatus }),
+          });
+          if (!res.ok) throw new Error('Error al actualizar');
 
-      setChannels(
-        channels.map((c) => (c.id === channel.id ? { ...c, isActive: updatedStatus } : c))
-      );
-      onFeedback(
-        `Línea ${channel.name} ${updatedStatus ? 'activada' : 'desactivada (fuera de línea)'}.`
-      );
-    } catch (err: any) {
-      alert(`Error al cambiar estado: ${err.message}`);
-    }
+          setChannels(
+            channels.map((c) => (c.id === channel.id ? { ...c, isActive: updatedStatus } : c))
+          );
+          onFeedback(
+            `Línea ${channel.name} ${updatedStatus ? 'activada' : 'desactivada (fuera de línea)'}.`
+          );
+        } catch (err: any) {
+          alert(`Error al cambiar estado: ${err.message}`);
+        }
+      },
+    });
   };
 
   // Eliminar Canal
   const handleDeleteChannel = async (id: string, name: string) => {
-    if (!confirm(`¿Eliminar la línea de atención "${name}"?`)) return;
+    requestConfirmation({
+      title: '¿Eliminar línea de atención / asesora?',
+      description: `¿Estás seguro de eliminar a "${name}" de las asesoras oficiales? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar Asesora',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/settings/support-channels?id=${id}`, {
+            method: 'DELETE',
+          });
+          if (!res.ok) throw new Error('Error al eliminar');
 
-    try {
-      const res = await fetch(`/api/settings/support-channels?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok) throw new Error('Error al eliminar');
-
-      setChannels(channels.filter((c) => c.id !== id));
-      onFeedback(`Canal "${name}" eliminado.`);
-    } catch (err: any) {
-      alert(`Error al eliminar canal: ${err.message}`);
-    }
+          setChannels(channels.filter((c) => c.id !== id));
+          onFeedback(`Canal "${name}" eliminado.`);
+        } catch (err: any) {
+          alert(`Error al eliminar canal: ${err.message}`);
+        }
+      },
+    });
   };
 
   return (
@@ -1286,6 +1395,86 @@ export default function MarketingSettingsTab({
           ))}
         </div>
       </div>
+
+      {/* ======================================================== */}
+      {/* MODAL DE CONFIRMACIÓN DE CAMBIOS EN CAMPAÑAS */}
+      {/* ======================================================== */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white max-w-md w-full rounded-3xl p-6 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between gap-3">
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                  confirmModal.isDestructive
+                    ? 'bg-rose-100 text-rose-600'
+                    : 'bg-blue-100 text-blue-600'
+                }`}
+              >
+                {confirmModal.isDestructive ? (
+                  <AlertTriangle className="w-6 h-6" />
+                ) : (
+                  <Sparkles className="w-6 h-6" />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-left">
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
+                {confirmModal.title}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                {confirmModal.description}
+              </p>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+              <span>Esta modificación afectará la experiencia de los clientes en tiempo real.</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                disabled={confirmLoading}
+                className="py-2.5 px-4 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                {confirmModal.cancelText || 'Cancelar'}
+              </button>
+
+              <button
+                type="button"
+                onClick={executeConfirmAction}
+                disabled={confirmLoading}
+                className={`py-2.5 px-5 rounded-xl text-xs font-bold text-white shadow-md active:scale-95 transition-all flex items-center gap-2 cursor-pointer ${
+                  confirmModal.isDestructive
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {confirmLoading ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Aplicando...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{confirmModal.confirmText || 'Confirmar y Guardar'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

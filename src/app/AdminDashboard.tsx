@@ -50,6 +50,10 @@ import {
   Volume2,
   VolumeX,
   BellRing,
+  RotateCw,
+  ZoomIn,
+  ZoomOut,
+  ExternalLink,
 } from 'lucide-react';
 
 import MarketingSettingsTab from '@/components/MarketingSettingsTab';
@@ -137,6 +141,9 @@ export default function AdminDashboard({
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [uploadingVoucherId, setUploadingVoucherId] = useState<string | null>(null);
   const [orderToPrint, setOrderToPrint] = useState<any | null>(null);
+  const [viewingVoucherOrder, setViewingVoucherOrder] = useState<any | null>(null);
+  const [voucherZoom, setVoucherZoom] = useState<number>(1);
+  const [voucherRotation, setVoucherRotation] = useState<number>(0);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   // Filtros de Órdenes
@@ -1685,15 +1692,18 @@ export default function AdminDashboard({
                             </label>
                           ) : (
                             <div className="flex items-center gap-1 mt-1">
-                              <a
-                                href={order.paymentReceiptUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-2 py-0.5 rounded transition-colors"
-                                title="Ver comprobante de pago"
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setVoucherZoom(1);
+                                  setVoucherRotation(0);
+                                  setViewingVoucherOrder(order);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 px-2 py-0.5 rounded transition-all cursor-pointer shadow-2xs active:scale-95"
+                                title="Visualizar comprobante en modal con zoom y validación"
                               >
                                 📎 Ver Voucher
-                              </a>
+                              </button>
                               <label
                                 className={`inline-flex items-center p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors ${
                                   uploadingVoucherId === order.id ? 'opacity-50 pointer-events-none' : ''
@@ -4057,6 +4067,181 @@ export default function AdminDashboard({
             <div className="mt-8 pt-3 border-t border-slate-200 text-center text-[9px] text-slate-400">
               <p>Este documento acredita el pedido emitido por la plataforma oficial de La Casa De Los Artefactos.</p>
               <p>Fecha de emisión: {new Date().toLocaleString('es-PE')} • Corporación Darwin Company S.A.C.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL VISUALIZADOR DE VOUCHER / COMPROBANTE DE PAGO */}
+      {/* ======================================================== */}
+      {viewingVoucherOrder && viewingVoucherOrder.paymentReceiptUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Cabecera del Modal */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  📎
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900">
+                      Comprobante de Pago (Voucher)
+                    </h3>
+                    <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                      {viewingVoucherOrder.orderNumber}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        viewingVoucherOrder.paymentStatus === 'VALIDATED'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}
+                    >
+                      {viewingVoucherOrder.paymentStatus === 'VALIDATED' ? '✓ Validado' : 'Pendiente Validación'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Cliente: <strong className="text-slate-700">{viewingVoucherOrder.customerName}</strong> •{' '}
+                    Monto total: <strong className="text-slate-900">S/ {Number(viewingVoucherOrder.totalAmount).toFixed(2)}</strong> •{' '}
+                    Método: <span className="font-medium text-slate-600">{viewingVoucherOrder.paymentMethod}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Botón Cerrar */}
+              <button
+                type="button"
+                onClick={() => setViewingVoucherOrder(null)}
+                className="w-9 h-9 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors flex items-center justify-center cursor-pointer"
+                title="Cerrar ventana"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Barra de Herramientas de Visualización */}
+            <div className="px-6 py-2.5 bg-slate-100 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+                  Zoom: {Math.round(voucherZoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVoucherZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
+                  className="p-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-slate-700 shadow-2xs cursor-pointer"
+                  title="Alejar (-)"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVoucherZoom(1);
+                    setVoucherRotation(0);
+                  }}
+                  className="px-2 py-1 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg font-bold text-slate-700 shadow-2xs text-[11px] cursor-pointer"
+                  title="Restablecer tamaño original"
+                >
+                  100%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoucherZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}
+                  className="p-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-slate-700 shadow-2xs cursor-pointer"
+                  title="Acercar (+)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoucherRotation((r) => (r + 90) % 360)}
+                  className="p-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-slate-700 shadow-2xs ml-1 cursor-pointer"
+                  title="Girar 90 grados"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/blob-proxy?url=${encodeURIComponent(viewingVoucherOrder.paymentReceiptUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Abrir en pestaña</span>
+                </a>
+                <a
+                  href={`/api/blob-proxy?url=${encodeURIComponent(viewingVoucherOrder.paymentReceiptUrl)}`}
+                  download={`voucher-${viewingVoucherOrder.orderNumber}.jpg`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Descargar</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Contenedor del Comprobante (Imagen o PDF) */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 bg-slate-900/90 flex items-center justify-center min-h-[420px]">
+              {viewingVoucherOrder.paymentReceiptUrl.toLowerCase().includes('.pdf') ? (
+                <iframe
+                  src={`/api/blob-proxy?url=${encodeURIComponent(viewingVoucherOrder.paymentReceiptUrl)}`}
+                  className="w-full h-[550px] rounded-xl bg-white border-0 shadow-lg"
+                  title="Comprobante en formato PDF"
+                />
+              ) : (
+                <div className="overflow-auto max-w-full max-h-full flex items-center justify-center p-2">
+                  <img
+                    src={`/api/blob-proxy?url=${encodeURIComponent(viewingVoucherOrder.paymentReceiptUrl)}`}
+                    alt={`Voucher del pedido ${viewingVoucherOrder.orderNumber}`}
+                    style={{
+                      transform: `scale(${voucherZoom}) rotate(${voucherRotation}deg)`,
+                      transformOrigin: 'center center',
+                    }}
+                    className="max-h-[520px] max-w-full object-contain rounded-xl shadow-2xl transition-transform duration-150 select-none bg-white"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Pie del Modal con Acciones Rápidas */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-slate-500">
+                <span>Ruta segura Vercel Blob descifrada por servidor administrativo oficial.</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {viewingVoucherOrder.paymentStatus !== 'VALIDATED' && canValidatePayments && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleValidatePayment(viewingVoucherOrder.id);
+                      setViewingVoucherOrder(null);
+                    }}
+                    disabled={loadingAction === `validate-${viewingVoucherOrder.id}`}
+                    className="inline-flex items-center gap-1.5 py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs transition-all shadow-md active:scale-95 cursor-pointer"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>
+                      {loadingAction === `validate-${viewingVoucherOrder.id}`
+                        ? 'Validando...'
+                        : 'Aprobar y Validar Pago'}
+                    </span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setViewingVoucherOrder(null)}
+                  className="py-2.5 px-5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>
