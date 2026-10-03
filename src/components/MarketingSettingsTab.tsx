@@ -611,21 +611,33 @@ export default function MarketingSettingsTab({
 
         {/* Vista previa en vivo */}
         <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
-            Vista previa del encabezado:
-          </span>
-          <div className="bg-slate-900 text-slate-200 text-xs py-2 px-4 rounded-xl flex items-center justify-between shadow-inner">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+              Vista previa del encabezado (Deslizable):
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              Color actual: {announcement.badgeText && announcement.badgeText.startsWith('#') ? announcement.badgeText : '#0047cc'}
+            </span>
+          </div>
+          <div
+            className="text-white text-xs py-2 px-4 rounded-xl flex items-center justify-between shadow-inner transition-colors duration-200"
+            style={{
+              backgroundColor: announcement.badgeText && announcement.badgeText.startsWith('#')
+                ? announcement.badgeText
+                : '#0047cc',
+            }}
+          >
             <div className="flex items-center gap-2 truncate">
               {announcement.highlightText && (
-                <span className="bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded tracking-wide">
+                <span className="bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded tracking-wide shadow-xs flex-shrink-0">
                   {announcement.highlightText}
                 </span>
               )}
-              <span className="font-medium truncate">{announcement.message || 'Sin mensaje configurado'}</span>
+              <span className="font-semibold truncate">{announcement.message || 'Sin mensaje configurado'}</span>
             </div>
             {announcement.linkText && (
-              <span className="text-emerald-400 font-bold hover:underline cursor-pointer flex-shrink-0 ml-4">
-                {announcement.linkText}
+              <span className="text-amber-300 font-bold hover:underline cursor-pointer flex-shrink-0 ml-4">
+                {announcement.linkText} →
               </span>
             )}
           </div>
@@ -633,9 +645,69 @@ export default function MarketingSettingsTab({
 
         {/* Formulario */}
         <form onSubmit={handleSaveAnnouncement} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          {/* Selector de Color de Fondo */}
+          <div className="md:col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+            <label className="block font-bold text-slate-800">
+              Color de Fondo de la Barra Superior:
+            </label>
+            <div className="flex items-center gap-3 flex-wrap">
+              {[
+                { label: 'Azul Oficial', hex: '#0047cc' },
+                { label: 'Rojo Descuento', hex: '#dc2626' },
+                { label: 'Negro Noche', hex: '#0a0f1d' },
+                { label: 'Verde Cyber', hex: '#059669' },
+                { label: 'Violeta Tech', hex: '#7c3aed' },
+              ].map((p) => {
+                const isSelected =
+                  (announcement.badgeText || '#0047cc').toLowerCase() === p.hex.toLowerCase();
+                return (
+                  <button
+                    key={p.hex}
+                    type="button"
+                    onClick={() => setAnnouncement({ ...announcement, badgeText: p.hex })}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'border-slate-900 bg-white shadow-sm ring-2 ring-blue-500'
+                        : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
+                      style={{ backgroundColor: p.hex }}
+                    />
+                    <span>{p.label}</span>
+                  </button>
+                );
+              })}
+
+              {/* Selector Libre de Color */}
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-300">
+                <input
+                  type="color"
+                  value={
+                    announcement.badgeText && announcement.badgeText.startsWith('#')
+                      ? announcement.badgeText
+                      : '#0047cc'
+                  }
+                  onChange={(e) => setAnnouncement({ ...announcement, badgeText: e.target.value })}
+                  className="w-8 h-8 rounded-lg border border-slate-300 cursor-pointer p-0.5"
+                  title="Elegir color personalizado"
+                />
+                <input
+                  type="text"
+                  value={announcement.badgeText || '#0047cc'}
+                  onChange={(e) => setAnnouncement({ ...announcement, badgeText: e.target.value })}
+                  placeholder="#0047cc"
+                  maxLength={7}
+                  className="w-24 p-1.5 rounded-lg border border-slate-300 font-mono text-xs uppercase"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="md:col-span-2">
             <label className="block font-bold text-slate-700 mb-1">
-              Mensaje del Anuncio / Campaña *
+              Mensaje del Anuncio / Campaña (Se deslizará continuamente) *
             </label>
             <input
               type="text"
