@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { orderBroadcaster } from '@/lib/orderBroadcaster';
+import { generateUniqueOrderNumber } from '@/lib/orderUtils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,9 +99,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Generar número de orden correlativo único
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderNumber = `CD-2026-${randomSuffix}`;
+    // 2. Generar correlativo de pedido de alta capacidad sin límite a 9999
+    const orderNumber = await generateUniqueOrderNumber(prisma);
 
     const session = await getServerSession(authOptions);
     const creatorUserId = (session?.user as any)?.id || null;

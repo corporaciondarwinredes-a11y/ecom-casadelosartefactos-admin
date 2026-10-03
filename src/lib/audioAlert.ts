@@ -1,18 +1,48 @@
 // Generador de audio sintético de alta fidelidad mediante Web Audio API
 // No requiere descargar archivos .mp3, funciona con latencia cero (0 ms)
+
+let sharedAudioContext: AudioContext | null = null;
+
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (!sharedAudioContext) {
+    const AudioContextClass =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      sharedAudioContext = new AudioContextClass();
+    }
+  }
+  if (sharedAudioContext && sharedAudioContext.state === 'suspended') {
+    sharedAudioContext.resume().catch(() => {});
+  }
+  return sharedAudioContext;
+}
+
+// Auto-desbloquear audio en el primer clic o toque del usuario
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    window.removeEventListener('click', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+  };
+  window.addEventListener('click', unlockAudio, { once: true, passive: true });
+  window.addEventListener('keydown', unlockAudio, { once: true, passive: true });
+  window.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+}
+
 export function playChimeSound(type: 'order' | 'voucher' | 'test' = 'order') {
   if (typeof window === 'undefined') return;
 
   try {
-    const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
-    const ctx = new AudioContextClass();
-
-    // Reanudar contexto si el navegador lo suspendió por autoplay policy
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      ctx.resume().catch(() => {});
     }
 
     const now = ctx.currentTime;

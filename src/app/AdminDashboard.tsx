@@ -419,17 +419,27 @@ export default function AdminDashboard({
   } = useRealtimeOrders({
     currentUserId: currentUser?.id,
     currentUserName: currentUser?.name || undefined,
+    currentUserPhone: (currentUser as any)?.phone || undefined,
     userRole,
+    isSellerRole,
     onNewOrder: (order) => {
-      // Refrescar únicamente la tabla de órdenes de forma eficiente sin llamadas pesadas
+      // Agregar inmediatamente la orden al inicio de la tabla en pantalla (0 ms de lag)
+      setOrders((prev) => {
+        const exists = prev.some((o) => o.id === order.id || o.orderNumber === order.orderNumber);
+        if (exists) return prev;
+        return [order as any, ...prev];
+      });
+
+      // Sincronizar en segundo plano
       fetch('/api/orders')
         .then((res) => (res.ok ? res.json() : null))
         .then((freshOrders) => {
           if (Array.isArray(freshOrders)) setOrders(freshOrders);
         })
         .catch((e) => console.error('Error refrescando pedidos en vivo:', e));
+
       setFeedbackMessage(`¡Nuevo Pedido en Vivo: ${order.orderNumber} por S/ ${Number(order.totalAmount).toFixed(2)}!`);
-      setTimeout(() => setFeedbackMessage(null), 5000);
+      setTimeout(() => setFeedbackMessage(null), 6000);
     },
   });
 
