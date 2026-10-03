@@ -4622,7 +4622,7 @@ export default function AdminDashboard({
               {/* RECUADRO TIPO DE COMPROBANTE SUNAT */}
               <div className="border-2 border-slate-900 rounded-xl p-3 text-center min-w-[220px] bg-slate-50/50">
                 <span className="text-[11px] font-mono font-bold block text-slate-700">
-                  R.U.C. 20608943813
+                  R.U.C. 20610475834
                 </span>
                 <span className="text-xs font-black uppercase text-blue-900 block my-0.5 tracking-wide">
                   {orderToPrint.customerDocType === 'RUC' || orderToPrint.customerFiscalName

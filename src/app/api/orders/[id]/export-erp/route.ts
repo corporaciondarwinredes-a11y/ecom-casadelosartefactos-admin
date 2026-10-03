@@ -46,7 +46,7 @@ export async function POST(
       originSystem: 'LA_CASA_DE_LOS_ARTEFACTOS_NEXTJS',
       company: {
         legalName: 'CORPORACIÓN DARWIN S.A.C.',
-        taxId: '20608943813',
+        taxId: '20610475834',
         commercialBrand: 'LA CASA DE LOS ARTEFACTOS',
         fiscalAddress: 'Lima, Perú',
       },
