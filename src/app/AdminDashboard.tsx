@@ -1142,13 +1142,13 @@ export default function AdminDashboard({
     }
   };
 
-  const handleToggleBrandActive = async (brandId: string, currentActive: boolean) => {
+  const handleToggleBrandActive = async (brandId: string, currentActive: boolean, brandName?: string) => {
     setLoadingAction(`toggle-brand-${brandId}`);
     try {
       const res = await fetch('/api/brands', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: brandId, isActive: !currentActive }),
+        body: JSON.stringify({ id: brandId, name: brandName, isActive: !currentActive }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -3062,7 +3062,7 @@ export default function AdminDashboard({
                       <td className="py-3.5 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => handleToggleBrandActive(b.id, b.isActive !== false)}
+                          onClick={() => handleToggleBrandActive(b.id, b.isActive !== false, b.name)}
                           disabled={loadingAction === `toggle-brand-${b.id}`}
                           className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
                             b.isActive !== false
