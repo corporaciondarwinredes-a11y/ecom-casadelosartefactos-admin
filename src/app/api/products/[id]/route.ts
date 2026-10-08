@@ -113,7 +113,7 @@ export async function PUT(
           price: price !== undefined ? Number(price) : existingProduct.price,
           stock: newStock,
           warrantyMonths: warrantyMonths !== undefined ? Number(warrantyMonths) : existingProduct.warrantyMonths,
-          energyRating: energyRating !== undefined ? energyRating : existingProduct.energyRating,
+          energyRating: energyRating !== undefined ? (energyRating && energyRating.trim() !== '' ? energyRating.trim() : null) : existingProduct.energyRating,
           voltage: voltage !== undefined ? voltage : existingProduct.voltage,
           dimensions: dimensions !== undefined ? (dimensions?.trim() || null) : existingProduct.dimensions,
           weightKg: weightKg !== undefined ? (weightKg ? Number(weightKg) : null) : existingProduct.weightKg,

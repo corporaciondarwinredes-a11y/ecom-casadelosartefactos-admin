@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         description: description || '',
         specifications: specifications || null,
         warrantyMonths: Number(warrantyMonths) || 12,
-        energyRating: energyRating || 'A+',
+        energyRating: energyRating && energyRating.trim() !== '' ? energyRating.trim() : null,
         voltage: voltage || '220V / 60Hz',
         dimensions: dimensions || null,
         weightKg: weightKg ? Number(weightKg) : null,
