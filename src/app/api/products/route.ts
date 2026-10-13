@@ -86,11 +86,11 @@ export async function POST(request: NextRequest) {
     const allImages: string[] = Array.isArray(images) && images.length > 0
       ? images
       : (image ? [image] : []);
-    const mainImage = image || (allImages.length > 0 ? allImages[0] : '');
+    const mainImage = image || (allImages.length > 0 ? allImages[0] : '/placeholder-artefacto.svg');
 
-    if (!name || !brand || !slug || !price || !sku || !mainImage) {
+    if (!name || !brand || !slug || !price || !sku) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios para el artefacto (Nombre, Marca, SKU, Precio e Imagen principal)' },
+        { error: 'Faltan campos obligatorios para el artefacto (Nombre, Marca, SKU y Precio de venta)' },
         { status: 400 }
       );
     }

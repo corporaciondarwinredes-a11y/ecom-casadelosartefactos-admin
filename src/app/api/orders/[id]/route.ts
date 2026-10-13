@@ -15,6 +15,16 @@ export async function GET(
       return NextResponse.json({ error: 'Acceso no autorizado: requiere sesión administrativa' }, { status: 401 });
     }
 
+    const userRole = (session?.user as any)?.role;
+    const isSuperadmin = userRole === 'SUPERADMIN';
+    const profile = (session?.user as any)?.profile;
+    const canOrders = isSuperadmin || Boolean(profile?.canOrders);
+    const canValidatePayments = isSuperadmin || Boolean(profile?.canValidatePayments);
+
+    if (!canOrders) {
+      return NextResponse.json({ error: 'Acceso denegado: no cuenta con permisos de pedidos' }, { status: 403 });
+    }
+
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
@@ -24,6 +34,22 @@ export async function GET(
 
     if (!order) {
       return NextResponse.json({ error: 'Pedido no encontrado' }, { status: 404 });
+    }
+
+    // Mitigación IDOR: Asesores solo pueden ver sus pedidos asignados
+    const isSeller = !isSuperadmin && !canValidatePayments && canOrders;
+    if (isSeller) {
+      const sellerId = (session.user as any)?.id;
+      const belongsToSeller =
+        order.assignedAdvisorId === sellerId ||
+        (session.user.email && order.customerEmail === session.user.email);
+
+      if (!belongsToSeller) {
+        return NextResponse.json(
+          { error: 'Acceso denegado: no cuenta con autorización para visualizar este pedido' },
+          { status: 403 }
+        );
+      }
     }
 
     return NextResponse.json(order);
@@ -45,6 +71,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Acceso no autorizado: requiere sesión activa' }, { status: 401 });
     }
 
+    const userRole = (session?.user as any)?.role;
+    const isSuperadmin = userRole === 'SUPERADMIN';
+    const profile = (session?.user as any)?.profile;
+    const canOrders = isSuperadmin || Boolean(profile?.canOrders);
+    const canValidatePayments = isSuperadmin || Boolean(profile?.canValidatePayments);
+
+    if (!canOrders) {
+      return NextResponse.json({ error: 'Acceso denegado: no cuenta con permisos de pedidos' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { paymentReceiptUrl } = body;
 
@@ -58,6 +94,22 @@ export async function PATCH(
 
     if (!existingOrder) {
       return NextResponse.json({ error: 'Pedido no encontrado' }, { status: 404 });
+    }
+
+    // Mitigación IDOR: Asesores solo pueden actualizar comprobantes de sus pedidos asignados
+    const isSeller = !isSuperadmin && !canValidatePayments && canOrders;
+    if (isSeller) {
+      const sellerId = (session.user as any)?.id;
+      const belongsToSeller =
+        existingOrder.assignedAdvisorId === sellerId ||
+        (session.user.email && existingOrder.customerEmail === session.user.email);
+
+      if (!belongsToSeller) {
+        return NextResponse.json(
+          { error: 'Acceso denegado: no cuenta con autorización para modificar este pedido' },
+          { status: 403 }
+        );
+      }
     }
 
     // Si el pedido estaba PENDING_PAYMENT, al subir el voucher se promueve a PENDING_VALIDATION

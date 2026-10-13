@@ -5,10 +5,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const internalSecret = process.env.INTERNAL_API_SECRET || 'darwin-internal-secret-2026';
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    // En producción es obligatorio configurar INTERNAL_API_SECRET; no se permite fallback inseguro
+    const effectiveSecret =
+      internalSecret ||
+      (process.env.NODE_ENV !== 'production' ? 'darwin-internal-secret-2026' : undefined);
+
     const providedSecret = req.headers.get('x-internal-secret');
 
-    if (!providedSecret || providedSecret !== internalSecret) {
+    if (!providedSecret || !effectiveSecret || providedSecret !== effectiveSecret) {
       return NextResponse.json(
         { error: 'Acceso no autorizado al canal de notificaciones internas' },
         { status: 401 }

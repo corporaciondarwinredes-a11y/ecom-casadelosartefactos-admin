@@ -19,24 +19,42 @@ export async function GET(req: NextRequest) {
 
     // Si es una URL externa (por ejemplo, Vercel Blob público o privado)
     if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-      const token =
-        process.env.BLOB_READ_WRITE_TOKEN ||
-        'vercel_blob_rw_weMd1E1HsUfQqNIK_XBfnaJreSrC0Mlv1I3BsZYgZ1kXYdh';
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(targetUrl);
+      } catch {
+        return NextResponse.json({ error: 'URL malformada' }, { status: 400 });
+      }
+
+      // Mitigación SSRF: Solo permitir protocolo HTTPS y dominios oficiales de Vercel Blob
+      const isAllowedHost =
+        parsedUrl.protocol === 'https:' &&
+        (parsedUrl.hostname === 'blob.vercel-storage.com' ||
+          parsedUrl.hostname.endsWith('.blob.vercel-storage.com'));
+
+      if (!isAllowedHost) {
+        return NextResponse.json(
+          { error: 'Dominio no permitido por política de seguridad (SSRF protection)' },
+          { status: 403 }
+        );
+      }
+
+      const token = process.env.BLOB_READ_WRITE_TOKEN;
 
       // Intentar fetch autenticado con el token Bearer para Blob privado
       const headers: Record<string, string> = {};
-      if (targetUrl.includes('blob.vercel-storage.com') && token) {
+      if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const blobRes = await fetch(targetUrl, {
+      const blobRes = await fetch(parsedUrl.toString(), {
         headers,
         cache: 'no-store',
       });
 
       if (!blobRes.ok) {
         // Fallback: si falla con Bearer, intentar sin Bearer
-        const fallbackRes = await fetch(targetUrl);
+        const fallbackRes = await fetch(parsedUrl.toString());
         if (!fallbackRes.ok) {
           return NextResponse.json(
             { error: `No se pudo acceder al archivo (${blobRes.status} / ${fallbackRes.status})` },

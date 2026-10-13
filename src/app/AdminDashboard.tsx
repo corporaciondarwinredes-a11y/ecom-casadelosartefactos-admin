@@ -55,9 +55,12 @@ import {
   ZoomOut,
   ExternalLink,
   Tag,
+  Menu,
 } from 'lucide-react';
 
 import MarketingSettingsTab from '@/components/MarketingSettingsTab';
+import AdminSidebar, { AdminTab } from '@/components/AdminSidebar';
+import BulkImportModal from '@/components/BulkImportModal';
 import { useRealtimeOrders } from '@/hooks/useRealtimeOrders';
 import { getSafeImageUrl } from '@/lib/imageUtils';
 
@@ -161,7 +164,9 @@ export default function AdminDashboard({
   const [brandSearch, setBrandSearch] = useState<string>('');
   const [kardexProductFilter, setKardexProductFilter] = useState<string>('ALL');
 
-  // Modales
+  // Modales y Navegación
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
   const [showBrandModal, setShowBrandModal] = useState(false);
@@ -982,12 +987,9 @@ export default function AdminDashboard({
     setLoadingAction('save-product');
 
     try {
-      const mainImage = newProduct.image || (newProduct.images.length > 0 ? newProduct.images[0] : '');
-      if (!mainImage && newProduct.images.length === 0) {
-        alert('Por favor sube al menos una foto del producto desde tu PC.');
-        setLoadingAction(null);
-        return;
-      }
+      const mainImage =
+        newProduct.image ||
+        (newProduct.images.length > 0 ? newProduct.images[0] : '/placeholder-artefacto.svg');
 
       if (editingProduct) {
         // ACTUALIZAR PRODUCTO EXISTENTE (PUT /api/products/[id])
@@ -1360,294 +1362,158 @@ export default function AdminDashboard({
   const selectedKardexProduct = products.find((p) => p.id === kardexProductFilter);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      {/* MENSAJE DE FEEDBACK OPERATIVO */}
-      {feedbackMessage && (
-        <div className="p-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg flex items-center justify-between text-xs animate-bounce">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-white" />
-            <span>{feedbackMessage}</span>
-          </div>
-          <button onClick={() => setFeedbackMessage(null)} className="text-white hover:opacity-80">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+    <div className="min-h-screen bg-slate-100/90 flex flex-col lg:flex-row">
+      {/* SIDEBAR ADMINISTRATIVO PROFESIONAL */}
+      <AdminSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        currentUser={currentUser}
+        userRole={userRole}
+        profile={profile}
+        isSuperadmin={isSuperadmin}
+        canCatalog={canCatalog}
+        canOrders={canOrders}
+        canKardex={canKardex}
+        kpis={kpis}
+        productCount={products.length}
+        brandCount={brands.length}
+        userCount={adminUsers.length}
+        assistedCartCount={assistedCart.length}
+        isRealtimeConnected={isRealtimeConnected}
+        soundEnabled={soundEnabled}
+        toggleSound={toggleSound}
+      />
 
-      {/* HEADER: OPERADOR & PERFIL RBAC ACTIVO */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-4">
-          <img
-            src="/logo-darwin.png"
-            alt="Corporación Darwin"
-            className="h-14 w-auto object-contain flex-shrink-0 bg-slate-50 p-1.5 rounded-2xl border border-slate-200 shadow-2xs"
-          />
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              Entorno Seguro • Control por Privilegios RBAC
-            </span>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight">
-              Panel de Control Administrativo & Kardex
-            </h1>
-            <p className="text-xs text-slate-500">
-              Corporación Darwin S.A.C. — Gestión comercial, inventario físico y tesorería.
-            </p>
-          </div>
-        </div>
+      {/* ÁREA DE CONTENIDO PRINCIPAL */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* BARRA SUPERIOR (HEADER) */}
+        <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 py-3.5 sticky top-0 z-30 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              title="Abrir menú de navegación"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-        {/* PERFIL OPERADOR Y LOGOUT */}
-        <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow">
-            {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : 'OP'}
-          </div>
-          <div className="flex flex-col text-left">
-            <span className="text-xs font-black text-slate-900 leading-tight">
-              {currentUser?.name || currentUser?.email}
-            </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span
-                className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded tracking-wider ${
-                  userRole === 'SUPERADMIN'
-                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                    : profile?.name?.includes('Venta')
-                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                    : profile?.name?.includes('Tesor')
-                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                }`}
-              >
-                {profile?.name || userRole}
-              </span>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {currentUser?.email}
-              </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+                  {activeTab === 'orders' && 'Gestión & Validación de Órdenes'}
+                  {activeTab === 'manualOrder' && 'Venta Asistida Concierge (POS)'}
+                  {activeTab === 'catalog' && 'Catálogo Maestro de Artefactos'}
+                  {activeTab === 'brands' && 'Registro de Marcas Oficiales'}
+                  {activeTab === 'kardex' && 'Kardex Calculado & Trazabilidad'}
+                  {activeTab === 'users' && 'Gestión de Operadores & Roles RBAC'}
+                  {activeTab === 'marketing' && 'Campañas, Banners & Concierge'}
+                </h1>
+                {isRealtimeConnected && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    En Vivo
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 hidden sm:block">
+                Corporación Darwin S.A.C. — La Casa de los Artefactos (Lima, Perú)
+              </p>
             </div>
           </div>
 
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="ml-2 p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-            title="Cerrar Sesión Segura"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Botón de Sonido en Header móvil */}
+            <button
+              type="button"
+              onClick={toggleSound}
+              className={`lg:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border ${
+                soundEnabled
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-slate-100 text-slate-600 border-slate-300'
+              }`}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
+            </button>
 
-        {/* CONTROL DE ALERTAS SONORAS & ESTADO EN VIVO (SSE) */}
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Badge de conexión en vivo */}
-          <div
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-2xl border text-xs font-bold transition-all ${
-              isRealtimeConnected
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                : 'bg-amber-50 text-amber-800 border-amber-300'
-            }`}
-            title={isRealtimeConnected ? 'Conectado a alertas de pedidos en vivo por SSE' : 'Reconectando canal de eventos...'}
-          >
-            <span className={`w-2 h-2 rounded-full ${isRealtimeConnected ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'}`} />
-            <span>{isRealtimeConnected ? 'Alertas en Vivo' : 'Reconectando...'}</span>
+            <button
+              onClick={refreshAllData}
+              className="flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 font-bold bg-white border border-slate-200 px-3 py-2 rounded-xl transition-all hover:bg-slate-50 shadow-2xs cursor-pointer active:scale-95"
+              title="Actualizar datos desde la base de datos"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Actualizar</span>
+            </button>
           </div>
+        </header>
 
-          {/* Botón de Sonido ON/OFF */}
-          <button
-            type="button"
-            onClick={toggleSound}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all border shadow-2xs ${
-              soundEnabled
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-emerald-500/20'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
-            }`}
-            title={soundEnabled ? 'Alertas sonoras activadas (Clic para silenciar)' : 'Alertas silenciadas (Clic para activar sonido)'}
-          >
-            {soundEnabled ? (
-              <>
-                <Volume2 className="w-4 h-4 text-emerald-100 animate-pulse" />
-                <span>Sonido (ON)</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-slate-400" />
-                <span>Sonido (OFF)</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+        {/* CUERPO DEL CONTENIDO PRINCIPAL */}
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] w-full mx-auto">
+          {/* MENSAJE DE FEEDBACK OPERATIVO */}
+          {feedbackMessage && (
+            <div className="p-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg flex items-center justify-between text-xs animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-white" />
+                <span>{feedbackMessage}</span>
+              </div>
+              <button onClick={() => setFeedbackMessage(null)} className="text-white hover:opacity-80">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
-      {/* KPIS EJECUTIVOS COMPACTOS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">Ventas Validadas</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp className="w-3.5 h-3.5" />
+          {/* KPIS EJECUTIVOS COMPACTOS */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-semibold">Ventas Validadas</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <p className="text-lg font-black text-slate-900 mt-1">
+                S/ {kpis.totalSales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-semibold">Por Validar Pago</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <p className="text-lg font-black text-amber-700 mt-1">
+                {kpis.pendingValidationCount} pedidos
+              </p>
+            </div>
+
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-semibold">Stock Central</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <Boxes className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <p className="text-lg font-black text-slate-900 mt-1">
+                {kpis.totalStockUnits} unidades ({products.length} artefactos)
+              </p>
+            </div>
+
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500 font-semibold">Stock Crítico (≤ 5)</span>
+                <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <p className="text-lg font-black text-rose-700 mt-1">
+                {kpis.lowStockAlerts} modelos
+              </p>
             </div>
           </div>
-          <p className="text-lg font-black text-slate-900 mt-1">
-            S/ {kpis.totalSales.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">Por Validar Pago</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-lg font-black text-amber-700 mt-1">
-            {kpis.pendingValidationCount} pedidos
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">Stock Central</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Boxes className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-lg font-black text-slate-900 mt-1">
-            {kpis.totalStockUnits} unidades ({products.length} artefactos)
-          </p>
-        </div>
-
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-semibold">Stock Crítico (≤ 5)</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-              <ShieldAlert className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <p className="text-lg font-black text-rose-700 mt-1">
-            {kpis.lowStockAlerts} modelos
-          </p>
-        </div>
-      </div>
-
-      {/* PESTAÑAS DE NAVEGACIÓN (CONTROLADAS POR RBAC) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 1. ÓRDENES (Visible si canOrders) */}
-          {canOrders && (
-            <button
-              onClick={() => setActiveTab('orders')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'orders'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <ShoppingCart className="w-4 h-4" />
-              <span>Órdenes & Validación</span>
-              {kpis.pendingValidationCount > 0 && (
-                <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-black">
-                  {kpis.pendingValidationCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* 2. VENTA ASISTIDA VISUAL (Visible para Vendedores, Superadmin o canOrders) */}
-          {canOrders && (
-            <button
-              onClick={() => setActiveTab('manualOrder')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'manualOrder'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                  : 'bg-white text-blue-700 hover:bg-blue-50 border border-blue-200'
-              }`}
-            >
-              <PlusCircle className="w-4 h-4 text-blue-300" />
-              <span>Venta Asistida POS ({assistedCart.length} en carrito)</span>
-            </button>
-          )}
-
-          {/* 3. CATÁLOGO (Visible si canCatalog) */}
-          {canCatalog && (
-            <button
-              onClick={() => setActiveTab('catalog')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'catalog'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Package className="w-4 h-4" />
-              <span>Catálogo ({products.length})</span>
-            </button>
-          )}
-
-          {/* 4. REGISTRO DE MARCAS OFICIALES (Visible si canCatalog) */}
-          {canCatalog && (
-            <button
-              onClick={() => setActiveTab('brands')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'brands'
-                  ? 'bg-blue-900 text-white shadow-md shadow-blue-900/20'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Tag className="w-4 h-4 text-amber-500" />
-              <span>Registro de Marcas ({brands.length})</span>
-            </button>
-          )}
-
-          {/* 4. KARDEX (Visible si canKardex) */}
-          {canKardex && (
-            <button
-              onClick={() => setActiveTab('kardex')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'kardex'
-                  ? 'bg-slate-900 text-white shadow-md shadow-slate-900/10'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-              <span>Kardex Calculado</span>
-            </button>
-          )}
-
-          {/* 5. USUARIOS RBAC (Solo Superadmin) */}
-          {isSuperadmin && (
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'users'
-                  ? 'bg-purple-900 text-white shadow-md shadow-purple-900/20'
-                  : 'bg-white text-purple-700 hover:bg-purple-50 border border-purple-200'
-              }`}
-            >
-              <Users className="w-4 h-4 text-purple-600" />
-              <span>Usuarios & RBAC ({adminUsers.length})</span>
-            </button>
-          )}
-
-          {/* 6. CAMPAÑAS, BANNERS & ATENCIÓN (Solo Superadmin o usuarios con permiso de Catálogo) */}
-          {(isSuperadmin || canCatalog) && (
-            <button
-              onClick={() => setActiveTab('marketing')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all ${
-                activeTab === 'marketing'
-                  ? 'bg-gradient-to-r from-blue-700 to-indigo-700 text-white shadow-md shadow-blue-600/25'
-                  : 'bg-white text-slate-700 hover:bg-blue-50 hover:text-blue-600 border border-slate-200'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Campañas, Banners & Atención</span>
-            </button>
-          )}
-        </div>
-
-        <button
-          onClick={refreshAllData}
-          className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold bg-white border border-slate-200 px-3 py-2 rounded-xl transition-all"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Actualizar</span>
-        </button>
-      </div>
 
       {/* ======================================================== */}
       {/* PESTAÑA 1: ÓRDENES CON FILTRO PREDETERMINADO DEL DÍA */}
@@ -2729,6 +2595,16 @@ export default function AdminDashboard({
               </button>
 
               <button
+                type="button"
+                onClick={() => setShowBulkImportModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+                title="Carga masiva de artefactos mediante archivo Excel (.xlsx o .csv)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+                <span>📥 Carga Masiva (Excel)</span>
+              </button>
+
+              <button
                 onClick={handleOpenNewProductModal}
                 className="inline-flex items-center gap-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 whitespace-nowrap cursor-pointer"
               >
@@ -3797,10 +3673,10 @@ export default function AdminDashboard({
                   <div className="flex items-center justify-between">
                     <div>
                       <label className="block font-bold text-slate-800 text-xs">
-                        Fotografías del Artefacto (Galería de Imágenes) *
+                        Fotografías del Artefacto (Galería de Imágenes) (Opcional)
                       </label>
                       <p className="text-[11px] text-slate-500">
-                        Puedes subir múltiples imágenes (foto frontal, lateral, interior, medidas). Se guardan como blobs en disco local C:.
+                        Puedes subir fotos ahora o dejar la portada provisional para subirlas después.
                       </p>
                     </div>
                     <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
@@ -5061,6 +4937,15 @@ export default function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* MODAL DE CARGA MASIVA EXCEL */}
+      <BulkImportModal
+        isOpen={showBulkImportModal}
+        onClose={() => setShowBulkImportModal(false)}
+        onSuccess={refreshAllData}
+      />
+        </div>
+      </div>
     </div>
   );
 }
