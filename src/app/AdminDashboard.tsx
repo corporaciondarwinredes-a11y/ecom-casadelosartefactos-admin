@@ -138,6 +138,7 @@ export default function AdminDashboard({
   const defaultTab = !canCatalog && canOrders ? 'manualOrder' : 'orders';
   const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'brands' | 'kardex' | 'manualOrder' | 'users' | 'marketing'>(defaultTab);
 
+  const [siteLogoUrl, setSiteLogoUrl] = useState<string | null>(initialAnnouncement?.logoUrl || null);
   const [products, setProducts] = useState(initialProducts);
   const [brands, setBrands] = useState(initialBrands);
   const [orders, setOrders] = useState(initialOrders);
@@ -1384,6 +1385,7 @@ export default function AdminDashboard({
         isRealtimeConnected={isRealtimeConnected}
         soundEnabled={soundEnabled}
         toggleSound={toggleSound}
+        logoUrl={siteLogoUrl}
       />
 
       {/* ÁREA DE CONTENIDO PRINCIPAL */}
@@ -3304,6 +3306,7 @@ export default function AdminDashboard({
           initialCategoryBanners={initialCategoryBanners}
           initialAnnouncement={initialAnnouncement}
           initialSupportChannels={initialSupportChannels}
+          onLogoChange={(newLogo) => setSiteLogoUrl(newLogo)}
           onFeedback={(msg) => {
             setFeedbackMessage(msg);
             setTimeout(() => setFeedbackMessage(null), 3500);
@@ -4522,7 +4525,7 @@ export default function AdminDashboard({
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-5 border-b-2 border-slate-900 gap-4">
               <div className="flex items-center gap-3">
                 <img
-                  src="/logo-darwin.png"
+                  src={siteLogoUrl || "/logo-darwin.png"}
                   alt="La Casa De Los Artefactos"
                   className="h-14 w-auto object-contain"
                 />

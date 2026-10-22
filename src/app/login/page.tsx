@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, Lock, Mail, AlertCircle, ArrowLeft } from 'lucide-react';
@@ -12,6 +12,18 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('/logo-darwin.png');
+
+  useEffect(() => {
+    fetch('/api/settings/logo')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.logoUrl) {
+          setLogoUrl(data.logoUrl);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,9 +61,10 @@ export default function AdminLoginPage() {
         <div className="text-center space-y-2">
           <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 inline-block mx-auto mb-2">
             <img
-              src="/logo-darwin.png"
+              src={logoUrl}
               alt="Corporación Darwin"
               className="h-16 w-auto object-contain mx-auto"
+              onError={() => setLogoUrl('/logo-darwin.png')}
             />
           </div>
           <span className="text-xs font-bold text-blue-600 uppercase tracking-widest block">

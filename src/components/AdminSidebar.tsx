@@ -47,6 +47,7 @@ interface Props {
   isRealtimeConnected: boolean;
   soundEnabled: boolean;
   toggleSound: () => void;
+  logoUrl?: string | null;
 }
 
 export default function AdminSidebar({
@@ -69,6 +70,7 @@ export default function AdminSidebar({
   isRealtimeConnected,
   soundEnabled,
   toggleSound,
+  logoUrl,
 }: Props) {
   const handleTabClick = (tab: AdminTab) => {
     setActiveTab(tab);
@@ -97,7 +99,7 @@ export default function AdminSidebar({
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="/logo-darwin.png"
+              src={logoUrl || "/logo-darwin.png"}
               alt="Corporación Darwin"
               className="h-10 w-auto object-contain bg-white/5 p-1 rounded-xl border border-slate-700/60"
             />

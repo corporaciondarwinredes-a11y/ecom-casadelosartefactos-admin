@@ -52,6 +52,7 @@ export async function PUT(req: Request) {
           linkUrl: data.linkUrl ?? existing.linkUrl,
           badgeText: data.badgeText ?? existing.badgeText,
           isActive: data.isActive !== undefined ? Boolean(data.isActive) : existing.isActive,
+          logoUrl: data.logoUrl !== undefined ? data.logoUrl : existing.logoUrl,
         },
       });
     } else {
@@ -63,6 +64,7 @@ export async function PUT(req: Request) {
           linkUrl: data.linkUrl || '/',
           badgeText: data.badgeText || 'GARANTÍA OFICIAL',
           isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+          logoUrl: data.logoUrl !== undefined ? data.logoUrl : null,
         },
       });
     }

@@ -30,6 +30,7 @@ interface Props {
   initialSupportChannels: any[];
   initialCategoryBanners?: any[];
   onFeedback: (msg: string) => void;
+  onLogoChange?: (logoUrl: string | null) => void;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -98,7 +99,14 @@ export default function MarketingSettingsTab({
   initialSupportChannels = [],
   initialCategoryBanners = [],
   onFeedback,
+  onLogoChange,
 }: Props) {
+  // Estado Logotipo Oficial de la Tienda
+  const [logoUrl, setLogoUrl] = useState<string>(initialAnnouncement?.logoUrl || '');
+  const [logoPreview, setLogoPreview] = useState<string>(initialAnnouncement?.logoUrl || '/logo-darwin.png');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [savingLogo, setSavingLogo] = useState(false);
+
   // Estado Banners del Carrusel
   const [banners, setBanners] = useState<any[]>(
     initialBanners && initialBanners.length > 0
@@ -559,6 +567,116 @@ export default function MarketingSettingsTab({
     });
   };
 
+  // Subir archivo de imagen para el Logotipo Oficial
+  const handleUploadLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido (.png, .webp, .svg, .jpg)');
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'general');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al subir la imagen');
+
+      if (data.url) {
+        setLogoUrl(data.url);
+        setLogoPreview(data.url);
+        onFeedback('¡Imagen de logotipo cargada! Haz clic en "Guardar y Publicar Logotipo" para aplicar los cambios.');
+      }
+    } catch (err: any) {
+      console.error('Error subiendo logo:', err);
+      alert(`Error al subir el logotipo: ${err.message}`);
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = '';
+    }
+  };
+
+  // Guardar y publicar logotipo oficial en base de datos
+  const handleSaveLogo = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const finalLogo = logoUrl.trim() || null;
+
+    requestConfirmation({
+      title: '¿Guardar y publicar el Logotipo Oficial?',
+      description: finalLogo
+        ? 'El nuevo logotipo se mostrará inmediatamente en el encabezado (Navbar), pie de página (Footer) y en la barra lateral del panel administrativo.'
+        : 'Al dejarlo en blanco, se restablecerá el logotipo predeterminado corporativo (/logo-darwin.png).',
+      confirmText: 'Guardar Logotipo',
+      onConfirm: async () => {
+        setSavingLogo(true);
+        try {
+          const res = await fetch('/api/settings/logo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logoUrl: finalLogo }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al guardar el logotipo');
+
+          const savedLogo = data.logoUrl || null;
+          setLogoUrl(savedLogo || '');
+          setLogoPreview(savedLogo || '/logo-darwin.png');
+          if (onLogoChange) {
+            onLogoChange(savedLogo);
+          }
+          onFeedback('¡Logotipo oficial de la tienda guardado y publicado exitosamente!');
+        } catch (err: any) {
+          alert(`Error al guardar el logotipo: ${err.message}`);
+        } finally {
+          setSavingLogo(false);
+        }
+      },
+    });
+  };
+
+  // Restablecer logotipo predeterminado
+  const handleResetLogo = () => {
+    requestConfirmation({
+      title: '¿Restablecer al Logotipo Original?',
+      description: 'Esta acción volverá a configurar el logotipo por defecto del sistema (/logo-darwin.png).',
+      confirmText: 'Restablecer Logo',
+      onConfirm: async () => {
+        setSavingLogo(true);
+        try {
+          const res = await fetch('/api/settings/logo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logoUrl: null }),
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al restablecer');
+
+          setLogoUrl('');
+          setLogoPreview('/logo-darwin.png');
+          if (onLogoChange) {
+            onLogoChange(null);
+          }
+          onFeedback('Logotipo restablecido al valor predeterminado del sistema.');
+        } catch (err: any) {
+          alert(`Error al restablecer: ${err.message}`);
+        } finally {
+          setSavingLogo(false);
+        }
+      },
+    });
+  };
+
   return (
     <div className="space-y-10">
       {/* HEADER DE LA SECCIÓN */}
@@ -569,11 +687,224 @@ export default function MarketingSettingsTab({
             Configuración Comercial & Campañas en Vivo
           </span>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
-            Gestión de Carrusel de Banners, Encabezados y Horarios de Atención
+            Gestión de Logotipo, Carrusel de Banners, Encabezados y Horarios
           </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Sube o cambia imágenes de banners promocionales para el carrusel principal, edita mensajes de la barra superior y administra los números de WhatsApp con horario automático sin tocar código.
+            Edita el logotipo oficial de la tienda, sube banners promocionales para el carrusel, personaliza anuncios y administra los números de WhatsApp con horario automático sin tocar código.
           </p>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 0. SECCIÓN: LOGOTIPO CORPORATIVO & IDENTIDAD DE MARCA */}
+      {/* ======================================================== */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-black text-slate-900">
+                  Logotipo Oficial de la Tienda (Identidad Visual)
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  En Vivo
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Edita o reemplaza el logo que aparece en la cabecera (Navbar), pie de página (Footer) y panel administrativo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {logoUrl ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Logo Personalizado Activo
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                Logo Corporativo Predeterminado
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* VISTAS PREVIAS DUALES (Modo Claro & Modo Oscuro) */}
+        <div>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2.5">
+            Vista previa en tiempo real del logotipo:
+          </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 1. Vista en Navbar (Modo Claro) */}
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/80 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
+                <span>☀️ Cabecera de la Tienda (Navbar - Fondo Claro)</span>
+                <span className="text-[10px] text-slate-400 font-mono">Visible a clientes</span>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-between gap-3 min-h-[64px]">
+                <div className="flex items-center gap-2.5">
+                  <img
+                    src={logoPreview}
+                    alt="Vista previa Logo Tienda"
+                    className="h-10 w-auto max-w-[140px] object-contain transition-transform"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/logo-darwin.png';
+                    }}
+                  />
+                  <div className="flex flex-col">
+                    <span className="font-black text-slate-900 text-xs leading-tight">
+                      La Casa De Los Artefactos
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                      Corporación Darwin
+                    </span>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                  <span>Catálogo</span>
+                  <span>•</span>
+                  <span>Promociones</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Vista en Footer y Sidebar (Modo Oscuro) */}
+            <div className="p-4 rounded-2xl border border-slate-800 bg-slate-950 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
+                <span>🌙 Pie de Página y Menú Admin (Fondo Oscuro)</span>
+                <span className="text-[10px] text-slate-500 font-mono">Contraste nocturno</span>
+              </div>
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 flex items-center justify-between gap-3 min-h-[64px]">
+                <div className="flex items-center gap-2.5">
+                  <div className="bg-white/5 p-1 rounded-lg border border-slate-700/60 flex items-center justify-center">
+                    <img
+                      src={logoPreview}
+                      alt="Vista previa Modo Oscuro"
+                      className="h-9 w-auto max-w-[130px] object-contain"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/logo-darwin.png';
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-extrabold text-white text-xs leading-tight">
+                      La Casa De Los Artefactos
+                    </span>
+                    <span className="text-[9px] text-slate-400 uppercase tracking-wider">
+                      Corporación Darwin
+                    </span>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center text-[10px] text-emerald-400 font-mono">
+                  ✓ Alta nitidez
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CONTROLES DE CARGA Y GUARDADO */}
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
+            {/* Opción 1: Subir desde PC */}
+            <div className="lg:col-span-5 space-y-1.5">
+              <label className="block text-xs font-bold text-slate-800">
+                Subir nuevo archivo de logotipo desde tu equipo:
+              </label>
+              <label
+                className={`flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+                  uploadingLogo
+                    ? 'border-blue-400 bg-blue-50/50 cursor-wait'
+                    : 'border-slate-300 hover:border-blue-500 hover:bg-blue-50/30'
+                }`}
+              >
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleUploadLogoFile}
+                  disabled={uploadingLogo || savingLogo}
+                  className="hidden"
+                />
+                <UploadCloud className={`w-5 h-5 ${uploadingLogo ? 'text-blue-500 animate-bounce' : 'text-slate-500'}`} />
+                <span className="text-xs font-bold text-slate-700">
+                  {uploadingLogo ? 'Subiendo imagen a la nube...' : 'Seleccionar imagen (.PNG / .SVG / .WEBP)'}
+                </span>
+              </label>
+            </div>
+
+            {/* Separador */}
+            <div className="lg:col-span-1 hidden lg:flex items-center justify-center text-xs font-bold text-slate-400">
+              O
+            </div>
+
+            {/* Opción 2: URL directa */}
+            <div className="lg:col-span-6 space-y-1.5">
+              <label className="block text-xs font-bold text-slate-800">
+                O ingresa la URL directa del logotipo (CDN / Cloudinary / Web):
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={logoUrl}
+                  onChange={(e) => {
+                    setLogoUrl(e.target.value);
+                    setLogoPreview(e.target.value.trim() || '/logo-darwin.png');
+                  }}
+                  placeholder="https://ejemplo.com/mi-logo.png"
+                  className="flex-1 text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+                {logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogoUrl('');
+                      setLogoPreview('/logo-darwin.png');
+                    }}
+                    className="p-2.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
+                    title="Limpiar campo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-200 text-xs">
+            <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              <strong>Consejo de diseño:</strong> Se recomienda usar un archivo <strong>PNG con fondo transparente</strong> o SVG con relación de aspecto ~3:1 para máxima legibilidad.
+            </p>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={handleResetLogo}
+                  disabled={savingLogo}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 transition-colors shadow-2xs"
+                  title="Restablecer al logo corporativo original de Darwin"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Restablecer Original
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleSaveLogo()}
+                disabled={savingLogo || uploadingLogo}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {savingLogo ? 'Guardando...' : 'Guardar y Publicar Logotipo'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

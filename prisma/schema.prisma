@@ -243,6 +243,7 @@ model AnnouncementBar {
   linkUrl       String?  @default("/?category=REFRIGERACION")
   badgeText     String?  @default("GARANTÍA OFICIAL")
   isActive      Boolean  @default(true)
+  logoUrl       String?  // URL del Logotipo oficial de la tienda (fallback a /logo-darwin.png)
   updatedAt     DateTime @updatedAt
 }
 
